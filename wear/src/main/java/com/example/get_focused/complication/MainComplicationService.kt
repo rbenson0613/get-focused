@@ -1,41 +1,104 @@
 package com.example.get_focused.complication
 
-import androidx.wear.watchface.complications.data.ComplicationData
-import androidx.wear.watchface.complications.data.ComplicationType
-import androidx.wear.watchface.complications.data.PlainComplicationText
-import androidx.wear.watchface.complications.data.ShortTextComplicationData
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
+import androidx.wear.watchface.complications.data.*
+import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
-import java.util.Calendar
+import com.example.get_focused.CountdownService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
-/**
- * Skeleton for complication data source that returns short text.
- */
 class MainComplicationService : SuspendingComplicationDataSourceService() {
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var countdownService: CountdownService? = null
+    private var isBound = false
+
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as CountdownService.LocalBinder
+            countdownService = binder.getService()
+            isBound = true
+            val updateRequester = ComplicationDataSourceUpdateRequester.create(
+                this@MainComplicationService,
+                ComponentName(
+                    this@MainComplicationService,
+                    MainComplicationService::class.java
+                )
+            )
+            updateRequester.requestUpdateAll()
+
+            scope.launch {
+                countdownService?.isRunning?.collect {
+                    updateRequester.requestUpdateAll()
+                }
+            }
+            scope.launch {
+                countdownService?.isPaused?.collect {
+                    updateRequester.requestUpdateAll()
+                }
+            }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            countdownService = null
+            isBound = false
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        Intent(this, CountdownService::class.java).also { intent ->
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
     override fun getPreviewData(type: ComplicationType): ComplicationData? {
-        if (type != ComplicationType.SHORT_TEXT) {
+        if (type != ComplicationType.RANGED_VALUE) {
             return null
         }
-        return createComplicationData("Mon", "Monday")
+        return RangedValueComplicationData.Builder(
+            value = 50f,
+            min = 0f,
+            max = 100f,
+            contentDescription = PlainComplicationText.Builder("Countdown").build()
+        ).setText(PlainComplicationText.Builder("10:00").build()).build()
     }
 
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData {
-        return when (Calendar.getInstance().get(Calendar.DAY_OF_WEEK)) {
-            Calendar.SUNDAY -> createComplicationData("Sun", "Sunday")
-            Calendar.MONDAY -> createComplicationData("Mon", "Monday")
-            Calendar.TUESDAY -> createComplicationData("Tue", "Tuesday")
-            Calendar.WEDNESDAY -> createComplicationData("Wed", "Wednesday")
-            Calendar.THURSDAY -> createComplicationData("Thu", "Thursday")
-            Calendar.FRIDAY -> createComplicationData("Fri!", "Friday!")
-            Calendar.SATURDAY -> createComplicationData("Sat", "Saturday")
-            else -> throw IllegalArgumentException("too many days")
+        val remainingTime = countdownService?.remainingTime?.first() ?: 0L
+        val duration = countdownService?.duration?.first() ?: 0L
+        val percentage = if (duration > 0) (remainingTime.toFloat() / duration) * 100 else 0f
+
+        return RangedValueComplicationData.Builder(
+            value = percentage,
+            min = 0f,
+            max = 100f,
+            contentDescription = PlainComplicationText.Builder("Countdown").build()
+        ).setText(PlainComplicationText.Builder(formatTime(remainingTime)).build()).build()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isBound) {
+            unbindService(connection)
+            isBound = false
         }
     }
 
-    private fun createComplicationData(text: String, contentDescription: String) =
-        ShortTextComplicationData.Builder(
-            text = PlainComplicationText.Builder(text).build(),
-            contentDescription = PlainComplicationText.Builder(contentDescription).build()
-        ).build()
+    private fun formatTime(millis: Long): String {
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(millis)
+        val seconds = TimeUnit.MILLISECONDS.toSeconds(millis) % 60
+        return String.format("%02d:%02d", minutes, seconds)
+    }
 }

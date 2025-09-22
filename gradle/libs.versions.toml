@@ -22,9 +22,15 @@ tilesTooling = "1.4.0"
 tilesToolingPreview = "1.4.0"
 horologistComposeTools = "0.6.17"
 horologistTiles = "0.6.17"
+horologistComposables = "0.6.17"
+wearComposeNavigation = "1.2.1"
 watchfaceComplicationsDataSourceKtx = "1.2.1"
+lifecycleViewmodelKtx = "2.6.1"
 
 [libraries]
+androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycleViewmodelKtx" }
+androidx-wear-compose-navigation = { group = "androidx.wear.compose", name = "navigation", version.ref = "wearComposeNavigation" }
+horologist-composables = { group = "com.google.android.horologist", name = "horologist-composables", version.ref = "horologistComposables" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
