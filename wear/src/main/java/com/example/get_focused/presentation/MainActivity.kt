@@ -1,25 +1,22 @@
-/* While this template provides a good starting point for using Wear Compose, you can always
- * take a look at https://github.com/android/wear-os-samples/tree/main/ComposeStarter to find the
- * most up to date changes to the libraries and their usages.
- */
-
 package com.example.get_focused.presentation
 
+import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import android.app.Application
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
@@ -27,6 +24,8 @@ import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import com.example.get_focused.presentation.theme.Get_FocusedTheme
+import com.google.android.horologist.composables.picker.Picker
+import com.google.android.horologist.composables.picker.rememberPickerState
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
@@ -65,11 +64,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import com.google.android.horologist.composables.picker.Picker
-import com.google.android.horologist.composables.picker.rememberPickerState
 
 @Composable
 fun TimeConfigurationScreen(onConfirm: (Int, Int) -> Unit) {
