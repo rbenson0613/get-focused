@@ -8,65 +8,67 @@ package com.example.get_focused.presentation
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.wear.compose.material.MaterialTheme
-import androidx.wear.compose.material.Text
-import androidx.wear.compose.material.TimeText
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.wear.compose.material.*
 import androidx.wear.tooling.preview.devices.WearDevices
-import com.example.get_focused.R
 import com.example.get_focused.presentation.theme.Get_FocusedTheme
 
 class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+    private val viewModel: CountdownViewModel by viewModels()
 
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        setTheme(android.R.style.Theme_DeviceDefault)
-
         setContent {
-            WearApp("Android")
+            val time by viewModel.time.collectAsState()
+            val progress by viewModel.progress.collectAsState()
+            Get_FocusedTheme {
+                CountdownScreen(
+                    progress = progress,
+                    time = time
+                )
+            }
         }
     }
 }
 
 @Composable
-fun WearApp(greetingName: String) {
-    Get_FocusedTheme {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colors.background),
-            contentAlignment = Alignment.Center
-        ) {
-            TimeText()
-            Greeting(greetingName = greetingName)
-        }
+fun CountdownScreen(progress: Float, time: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(
+            progress = progress,
+            modifier = Modifier.fillMaxSize(),
+            strokeWidth = 8.dp
+        )
+        Text(
+            text = time,
+            textAlign = TextAlign.Center,
+            fontSize = 48.sp,
+            color = MaterialTheme.colors.primary
+        )
     }
-}
-
-@Composable
-fun Greeting(greetingName: String) {
-    Text(
-        modifier = Modifier.fillMaxWidth(),
-        textAlign = TextAlign.Center,
-        color = MaterialTheme.colors.primary,
-        text = stringResource(R.string.hello_world, greetingName)
-    )
 }
 
 @Preview(device = WearDevices.SMALL_ROUND, showSystemUi = true)
 @Composable
 fun DefaultPreview() {
-    WearApp("Preview Android")
+    Get_FocusedTheme {
+        CountdownScreen(
+            progress = 0.75f,
+            time = "11:23"
+        )
+    }
 }
