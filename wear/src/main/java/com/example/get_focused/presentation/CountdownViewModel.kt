@@ -4,20 +4,33 @@ import android.os.CountDownTimer
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.Timer
+import java.util.TimerTask
 import java.util.concurrent.TimeUnit
 
 class CountdownViewModel : ViewModel() {
-    private val _time = MutableStateFlow("00:10")
+    // For the countdown timer
+    private val initialCountdownMillis = (28 * 60 + 30) * 1000L // 28 minutes 30 seconds
+    private val _time = MutableStateFlow("28:30")
     val time = _time.asStateFlow()
 
     private val _progress = MutableStateFlow(1f)
     val progress = _progress.asStateFlow()
 
-    private val timer = object : CountDownTimer(10000, 1000) {
+    // For the current time clock
+    private val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
+    private val _currentTime = MutableStateFlow(timeFormatter.format(Date()))
+    val currentTime = _currentTime.asStateFlow()
+
+    private val countdownTimer = object : CountDownTimer(initialCountdownMillis, 1000) {
         override fun onTick(millisUntilFinished: Long) {
-            val seconds = TimeUnit.MILLISECONDS.toSeconds(millisUntilFinished)
-            _time.value = String.format("%02d:%02d", seconds / 60, seconds % 60)
-            _progress.value = millisUntilFinished / 10000f
+            val minutes = TimeUnit.MILLISECONDS.toMinutes(millisUntilFinished)
+            val seconds = TimeUnit.MILLISECONDS.toSeconds(millisUntilFinished) % 60
+            _time.value = String.format("%02d:%02d", minutes, seconds)
+            _progress.value = millisUntilFinished.toFloat() / initialCountdownMillis
         }
 
         override fun onFinish() {
@@ -26,12 +39,26 @@ class CountdownViewModel : ViewModel() {
         }
     }
 
+    private var clockTimer: Timer? = null
+
+
     init {
-        timer.start()
+        startClock()
+        countdownTimer.start()
+    }
+
+    private fun startClock() {
+        clockTimer = Timer()
+        clockTimer?.scheduleAtFixedRate(object : TimerTask() {
+            override fun run() {
+                _currentTime.value = timeFormatter.format(Date())
+            }
+        }, 0, 1000)
     }
 
     override fun onCleared() {
         super.onCleared()
-        timer.cancel()
+        countdownTimer.cancel()
+        clockTimer?.cancel()
     }
 }
