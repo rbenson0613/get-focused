@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Coffee
@@ -79,41 +80,49 @@ fun CountdownScreen(
             indicatorColor = MaterialTheme.colors.primary,
             trackColor = MaterialTheme.colors.onBackground.copy(alpha = 0.1f)
         )
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+
+        // A container for the content that should be inside the circle
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)) {
             Text(
                 text = currentTime,
+                modifier = Modifier.align(Alignment.TopCenter),
                 textAlign = TextAlign.Center,
                 fontSize = 24.sp
             )
-            Spacer(modifier = Modifier.height(8.dp))
+
             Icon(
                 imageVector = Icons.Default.Coffee,
                 contentDescription = "Coffee break icon",
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier
+                    .size(48.dp)
+                    .align(Alignment.Center)
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = time,
-                textAlign = TextAlign.Center,
-                fontSize = 48.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colors.primary
-            )
-            Text(
-                text = eventDescription,
-                textAlign = TextAlign.Center,
-                fontSize = 16.sp,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Icon(
-                imageVector = Icons.Default.Settings,
-                contentDescription = "Settings icon",
-                modifier = Modifier.size(24.dp)
-            )
+
+            Column(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = time,
+                    textAlign = TextAlign.Center,
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colors.primary
+                )
+                Text(
+                    text = eventDescription,
+                    textAlign = TextAlign.Center,
+                    fontSize = 16.sp,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings icon",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
     }
 }
