@@ -9,22 +9,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Coffee
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -55,7 +52,7 @@ class MainActivity : ComponentActivity() {
                     progress = progress,
                     time = time,
                     currentTime = currentTime,
-                    eventDescription = "Morning Coffee Break" // Placeholder
+                    eventDescription = "Coffee Break" // Placeholder
                 )
             }
         }
@@ -76,27 +73,27 @@ fun CountdownScreen(
         CircularProgressIndicator(
             progress = progress,
             modifier = Modifier.fillMaxSize(),
-            strokeWidth = 12.dp,
-            indicatorColor = MaterialTheme.colors.primary,
+            strokeWidth = 8.dp, // Thinner progress bar
+            indicatorColor = Color(0xFF00BCD4), // Cyan color
             trackColor = MaterialTheme.colors.onBackground.copy(alpha = 0.1f)
         )
 
         // A container for the content that should be inside the circle
         Box(modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp)) {
+            .padding(16.dp)) { // Reduced padding
             Text(
                 text = currentTime,
                 modifier = Modifier.align(Alignment.TopCenter),
                 textAlign = TextAlign.Center,
-                fontSize = 24.sp
+                fontSize = 20.sp // Smaller font
             )
 
             Icon(
                 imageVector = Icons.Default.Coffee,
                 contentDescription = "Coffee break icon",
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(36.dp) // Smaller icon
                     .align(Alignment.Center)
             )
 
@@ -107,20 +104,14 @@ fun CountdownScreen(
                 Text(
                     text = time,
                     textAlign = TextAlign.Center,
-                    fontSize = 48.sp,
+                    fontSize = 40.sp, // Smaller font
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colors.primary
+                    color = Color(0xFF00BCD4) // Cyan color
                 )
                 Text(
                     text = eventDescription,
                     textAlign = TextAlign.Center,
-                    fontSize = 16.sp,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Settings icon",
-                    modifier = Modifier.size(24.dp)
+                    fontSize = 14.sp, // Smaller font
                 )
             }
         }
@@ -133,9 +124,9 @@ fun DefaultPreview() {
     Get_FocusedTheme {
         CountdownScreen(
             progress = 0.75f,
-            time = "28:30",
-            currentTime = "10:30 AM",
-            eventDescription = "Morning Coffee Break"
+            time = "04:51",
+            currentTime = "10:09 AM",
+            eventDescription = "Coffee Break"
         )
     }
 }
