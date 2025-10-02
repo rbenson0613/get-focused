@@ -11,7 +11,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -82,38 +84,44 @@ fun CountdownScreen(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)) { // Reduced padding
+
+            // Clock time, slightly lowered
             Text(
                 text = currentTime,
-                modifier = Modifier.align(Alignment.TopCenter),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp), // Lowered
                 textAlign = TextAlign.Center,
                 fontSize = 20.sp // Smaller font
             )
 
-            Icon(
-                imageVector = Icons.Default.Coffee,
-                contentDescription = "Coffee break icon",
-                modifier = Modifier
-                    .size(36.dp) // Smaller icon
-                    .align(Alignment.Center)
-            )
-
+            // Central content: description and icon
             Column(
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = time,
-                    textAlign = TextAlign.Center,
-                    fontSize = 40.sp, // Smaller font
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF00BCD4) // Cyan color
-                )
                 Text(
                     text = eventDescription,
                     textAlign = TextAlign.Center,
                     fontSize = 14.sp, // Smaller font
                 )
+                Spacer(modifier = Modifier.height(4.dp))
+                Icon(
+                    imageVector = Icons.Default.Coffee,
+                    contentDescription = "Coffee break icon",
+                    modifier = Modifier.size(36.dp) // Smaller icon
+                )
             }
+
+            // Countdown timer at the bottom
+            Text(
+                text = time,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                textAlign = TextAlign.Center,
+                fontSize = 40.sp, // Smaller font
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF00BCD4) // Cyan color
+            )
         }
     }
 }
