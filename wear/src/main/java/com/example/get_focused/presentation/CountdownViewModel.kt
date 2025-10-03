@@ -1,7 +1,13 @@
 package com.example.get_focused.presentation
 
+import android.app.Application
+import android.content.Context
+import android.media.RingtoneManager
+import android.os.Build
 import android.os.CountDownTimer
-import androidx.lifecycle.ViewModel
+import android.os.VibrationEffect
+import android.os.Vibrator
+import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.text.SimpleDateFormat
@@ -11,10 +17,10 @@ import java.util.Timer
 import java.util.TimerTask
 import java.util.concurrent.TimeUnit
 
-class CountdownViewModel : ViewModel() {
+class CountdownViewModel(application: Application) : AndroidViewModel(application) {
     // For the countdown timer
-    private val initialCountdownMillis = (1 * 60 + 0) * 1000L // 5 minutes 30 seconds
-    private val _time = MutableStateFlow("5:30")
+    private val initialCountdownMillis = (28 * 60 + 30) * 1000L // 28 minutes 30 seconds
+    private val _time = MutableStateFlow("28:30")
     val time = _time.asStateFlow()
 
     private val _progress = MutableStateFlow(1f)
@@ -36,11 +42,33 @@ class CountdownViewModel : ViewModel() {
         override fun onFinish() {
             _time.value = "00:00"
             _progress.value = 0f
+            triggerNotification()
+        }
+    }
+
+    private fun triggerNotification() {
+        val context = getApplication<Application>().applicationContext
+
+        // Vibrate
+        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            // Deprecated in API 26
+            vibrator.vibrate(500)
+        }
+
+        // Play sound
+        try {
+            val notificationSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val ringtone = RingtoneManager.getRingtone(context, notificationSoundUri)
+            ringtone.play()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     private var clockTimer: Timer? = null
-
 
     init {
         startClock()
