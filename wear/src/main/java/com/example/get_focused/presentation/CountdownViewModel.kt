@@ -19,8 +19,8 @@ import java.util.concurrent.TimeUnit
 
 class CountdownViewModel(application: Application) : AndroidViewModel(application) {
     // For the countdown timer
-    private val initialCountdownMillis = (28 * 60 + 30) * 1000L // 28 minutes 30 seconds
-    private val _time = MutableStateFlow("28:30")
+    private val initialCountdownMillis = (1 * 60 + 0) * 1000L // 1 minute 0 seconds
+    private val _time = MutableStateFlow("1:00")
     val time = _time.asStateFlow()
 
     private val _progress = MutableStateFlow(1f)
