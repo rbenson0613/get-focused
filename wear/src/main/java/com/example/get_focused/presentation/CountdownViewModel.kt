@@ -13,8 +13,8 @@ import java.util.concurrent.TimeUnit
 
 class CountdownViewModel : ViewModel() {
     // For the countdown timer
-    private val initialCountdownMillis = (28 * 60 + 30) * 1000L // 28 minutes 30 seconds
-    private val _time = MutableStateFlow("28:30")
+    private val initialCountdownMillis = (1 * 60 + 0) * 1000L // 5 minutes 30 seconds
+    private val _time = MutableStateFlow("5:30")
     val time = _time.asStateFlow()
 
     private val _progress = MutableStateFlow(1f)

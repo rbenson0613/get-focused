@@ -92,7 +92,7 @@ fun CountdownScreen(
                     .align(Alignment.TopCenter)
                     .padding(top = 8.dp), // Lowered
                 textAlign = TextAlign.Center,
-                fontSize = 20.sp // Smaller font
+                fontSize = 18.sp // Smaller font
             )
 
             // Central content: description and icon
@@ -103,13 +103,13 @@ fun CountdownScreen(
                 Text(
                     text = eventDescription,
                     textAlign = TextAlign.Center,
-                    fontSize = 14.sp, // Smaller font
+                    fontSize = 18.sp, // Smaller font
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Icon(
                     imageVector = Icons.Default.Coffee,
                     contentDescription = "Coffee break icon",
-                    modifier = Modifier.size(36.dp) // Smaller icon
+                    modifier = Modifier.size(38.dp) // Smaller icon
                 )
             }
 
@@ -118,7 +118,7 @@ fun CountdownScreen(
                 text = time,
                 modifier = Modifier.align(Alignment.BottomCenter),
                 textAlign = TextAlign.Center,
-                fontSize = 40.sp, // Smaller font
+                fontSize = 34.sp, // Smaller font
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF00BCD4) // Cyan color
             )
