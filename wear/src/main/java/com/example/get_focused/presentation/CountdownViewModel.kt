@@ -8,8 +8,14 @@ import android.os.CountDownTimer
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.get_focused.calendar.CalendarManager
+import com.example.get_focused.presentation.ui.UiEvent
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.api.services.calendar.CalendarScopes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -17,48 +23,135 @@ import java.util.Timer
 import java.util.TimerTask
 import java.util.concurrent.TimeUnit
 
+sealed class AppState {
+    object Loading : AppState()
+    object NeedsSignIn : AppState()
+    data class ShowEventList(val events: List<UiEvent>) : AppState()
+    data class WaitingForEvent(val currentTime: String, val eventTitle: String) : AppState()
+    data class ShowCountdown(
+        val progress: Float,
+        val time: String,
+        val currentTime: String,
+        val eventTitle: String
+    ) : AppState()
+}
+
 class CountdownViewModel(application: Application) : AndroidViewModel(application) {
-    // For the countdown timer
-    private val initialCountdownMillis = (1 * 60 + 0) * 1000L // 1 minute 0 seconds
-    private val _time = MutableStateFlow("1:00")
-    val time = _time.asStateFlow()
 
-    private val _progress = MutableStateFlow(1f)
-    val progress = _progress.asStateFlow()
+    private val _appState = MutableStateFlow<AppState>(AppState.Loading)
+    val appState = _appState.asStateFlow()
 
-    // For the current time clock
+    private var countdownTimer: CountDownTimer? = null
+    private var eventStartTimer: Timer? = null
+    private var clockTimer: Timer? = null
     private val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
     private val _currentTime = MutableStateFlow(timeFormatter.format(Date()))
-    val currentTime = _currentTime.asStateFlow()
 
-    private val countdownTimer = object : CountDownTimer(initialCountdownMillis, 1000) {
-        override fun onTick(millisUntilFinished: Long) {
-            val minutes = TimeUnit.MILLISECONDS.toMinutes(millisUntilFinished)
-            val seconds = TimeUnit.MILLISECONDS.toSeconds(millisUntilFinished) % 60
-            _time.value = String.format("%02d:%02d", minutes, seconds)
-            _progress.value = millisUntilFinished.toFloat() / initialCountdownMillis
+    init {
+        startClock()
+        checkSignInStatus()
+    }
+
+    fun checkSignInStatus() {
+        viewModelScope.launch {
+            _appState.value = AppState.Loading
+            val account = GoogleSignIn.getLastSignedInAccount(getApplication())
+            if (account != null && account.grantedScopes.any { it.scopeUri == CalendarScopes.CALENDAR_READONLY }) {
+                CalendarManager.initialize(getApplication(), account)
+                val events = CalendarManager.getUpcomingEvents()
+                val uiEvents = events.mapNotNull { event ->
+                    val start = event.start?.dateTime?.value
+                    val end = event.end?.dateTime?.value
+                    if (start != null && end != null) {
+                        UiEvent(
+                            title = event.summary ?: "No Title",
+                            startTimeMillis = start,
+                            endTimeMillis = end
+                        )
+                    } else {
+                        null
+                    }
+                }
+
+                val now = System.currentTimeMillis()
+                val activeEvent = uiEvents.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
+
+                if (activeEvent != null) {
+                    val remainingDuration = activeEvent.endTimeMillis - now
+                    startCountdown(remainingDuration, activeEvent.title)
+                } else {
+                    _appState.value = AppState.ShowEventList(uiEvents)
+                }
+            } else {
+                _appState.value = AppState.NeedsSignIn
+            }
+        }
+    }
+
+    fun startCountdownForEvent(event: UiEvent) {
+        countdownTimer?.cancel()
+        eventStartTimer?.cancel()
+
+        val now = System.currentTimeMillis()
+        val durationMillis = event.endTimeMillis - event.startTimeMillis
+
+        if (durationMillis <= 0) {
+            checkSignInStatus()
+            return
         }
 
-        override fun onFinish() {
-            _time.value = "00:00"
-            _progress.value = 0f
-            triggerNotification()
+        if (now < event.startTimeMillis) {
+            _appState.value = AppState.WaitingForEvent(_currentTime.value, event.title)
+
+            eventStartTimer = Timer()
+            eventStartTimer?.schedule(object : TimerTask() {
+                override fun run() {
+                    startCountdown(durationMillis, event.title)
+                }
+            }, event.startTimeMillis - now)
+
+        } else {
+            val remainingDuration = event.endTimeMillis - now
+            if (remainingDuration > 0) {
+                startCountdown(remainingDuration, event.title)
+            } else {
+                checkSignInStatus()
+            }
         }
+    }
+
+    private fun startCountdown(durationMillis: Long, eventTitle: String) {
+        countdownTimer?.cancel()
+        countdownTimer = object : CountDownTimer(durationMillis, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                val minutes = TimeUnit.MILLISECONDS.toMinutes(millisUntilFinished)
+                val seconds = TimeUnit.MILLISECONDS.toSeconds(millisUntilFinished) % 60
+                val timeString = String.format("%02d:%02d", minutes, seconds)
+                val progress = millisUntilFinished.toFloat() / durationMillis
+
+                _appState.value = AppState.ShowCountdown(
+                    progress = progress,
+                    time = timeString,
+                    currentTime = _currentTime.value,
+                    eventTitle = eventTitle
+                )
+            }
+
+            override fun onFinish() {
+                triggerNotification()
+                checkSignInStatus()
+            }
+        }.start()
     }
 
     private fun triggerNotification() {
         val context = getApplication<Application>().applicationContext
-
-        // Vibrate
         val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
         } else {
-            // Deprecated in API 26
             vibrator.vibrate(500)
         }
-
-        // Play sound
         try {
             val notificationSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             val ringtone = RingtoneManager.getRingtone(context, notificationSoundUri)
@@ -66,13 +159,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         } catch (e: Exception) {
             e.printStackTrace()
         }
-    }
-
-    private var clockTimer: Timer? = null
-
-    init {
-        startClock()
-        countdownTimer.start()
     }
 
     private fun startClock() {
@@ -86,7 +172,8 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
 
     override fun onCleared() {
         super.onCleared()
-        countdownTimer.cancel()
+        countdownTimer?.cancel()
+        eventStartTimer?.cancel()
         clockTimer?.cancel()
     }
 }
