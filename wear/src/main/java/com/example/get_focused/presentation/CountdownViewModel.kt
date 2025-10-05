@@ -96,7 +96,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 // We need to get the access token on a background thread.
                 val token = getSignInToken(account)
 
-                val events = CalendarManager.getUpcomingEvents(token.accessToken)
+                val events = CalendarManager.getUpcomingEvents(getApplication(), account)
 
                 val rfc3339Formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
 

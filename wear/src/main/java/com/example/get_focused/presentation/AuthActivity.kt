@@ -10,9 +10,20 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.google.api.services.calendar.CalendarScopes
+import com.example.get_focused.R
 
 class AuthActivity : ComponentActivity() {
 
+    private val googleSignInOptions: GoogleSignInOptions by lazy {
+        // This now works because the R class is imported
+        val serverClientId = getString(R.string.server_client_id)
+
+        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+            .requestScopes(Scope(CalendarScopes.CALENDAR_READONLY))
+            .requestServerSideAccess(serverClientId)
+            .build()
+    }
     private val signInLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -37,24 +48,7 @@ class AuthActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val gso: GoogleSignInOptions by lazy {
-            // This is your Web Client ID from Google Cloud Console, NOT your Android Client ID.
-            // It's best practice to store this in your strings.xml file.
-            val serverClientId = ""
-                //getString(R.string.server_client_id)
-
-            GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestEmail()
-                // This line asks for permission to read calendar events
-                .requestScopes(Scope("https://www.googleapis.com/auth/calendar.readonly"))
-                // --- ADD THIS LINE ---
-                // This line requests a one-time code that your backend server can exchange
-                // for an access and refresh token.
-                .requestServerSideAccess(serverClientId)
-                .build()
-        }
-
-        val googleSignInClient = GoogleSignIn.getClient(this, gso)
+        val googleSignInClient = GoogleSignIn.getClient(this, googleSignInOptions)
 
         val signInIntent = googleSignInClient.signInIntent
         signInLauncher.launch(signInIntent)
