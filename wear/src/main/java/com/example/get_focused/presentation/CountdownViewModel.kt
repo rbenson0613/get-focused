@@ -26,6 +26,8 @@ import java.util.TimeZone
 import java.util.Timer
 import java.util.TimerTask
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 sealed class AppState {
     object Loading : AppState()
@@ -68,13 +70,31 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    suspend fun getSignInToken(account: GoogleSignInAccount) {
+        // The auth code is now a simple property on the account object.
+        // It can be null if something went wrong or if it wasn't requested.
+        val authCode: String? = account.serverAuthCode
+
+        if (authCode != null) {
+            // Now you have the auth code. You would typically send this
+            // to your backend server, which then exchanges it for tokens.
+            // For your client-side-only app, you might not need this flow
+            // and can continue using GoogleAccountCredential as before.
+            Log.d("Auth", "Server Auth Code: $authCode")
+
+            // If your goal is just to make client-side calls, you still
+            // use GoogleAccountCredential, which handles token management internally.
+            // The requestServerSideAccess flow is primarily for backend integration.
+        } else {
+            Log.e("Auth", "Server Auth Code was null. Did you request it in GoogleSignInOptions?")
+        }
+    }
+
     private fun fetchCalendarEvents(account: GoogleSignInAccount) {
         viewModelScope.launch {
             try {
                 // We need to get the access token on a background thread.
-                val token = withContext(Dispatchers.IO) {
-                    account.requestServerSideAccess(getClientId(), Scope("https://www.googleapis.com/auth/calendar.readonly"))
-                }
+                val token = getSignInToken(account)
 
                 val events = CalendarManager.getUpcomingEvents(token.accessToken)
 

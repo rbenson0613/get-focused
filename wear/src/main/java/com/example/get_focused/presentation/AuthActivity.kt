@@ -37,10 +37,22 @@ class AuthActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .requestScopes(Scope("https://www.googleapis.com/auth/calendar.readonly"))
-            .build()
+        val gso: GoogleSignInOptions by lazy {
+            // This is your Web Client ID from Google Cloud Console, NOT your Android Client ID.
+            // It's best practice to store this in your strings.xml file.
+            val serverClientId = ""
+                //getString(R.string.server_client_id)
+
+            GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestEmail()
+                // This line asks for permission to read calendar events
+                .requestScopes(Scope("https://www.googleapis.com/auth/calendar.readonly"))
+                // --- ADD THIS LINE ---
+                // This line requests a one-time code that your backend server can exchange
+                // for an access and refresh token.
+                .requestServerSideAccess(serverClientId)
+                .build()
+        }
 
         val googleSignInClient = GoogleSignIn.getClient(this, gso)
 

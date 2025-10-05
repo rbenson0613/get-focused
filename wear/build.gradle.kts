@@ -59,6 +59,7 @@ dependencies {
     implementation(libs.play.services.auth)
     implementation(libs.okhttp)
     implementation(libs.gson)
+    implementation(libs.bundles.google.api)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
