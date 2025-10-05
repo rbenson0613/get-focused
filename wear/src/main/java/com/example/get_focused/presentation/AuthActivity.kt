@@ -15,13 +15,13 @@ import com.example.get_focused.R
 class AuthActivity : ComponentActivity() {
 
     private val googleSignInOptions: GoogleSignInOptions by lazy {
-        // This now works because the R class is imported
+        // Get the ID from your strings.xml file.
         val serverClientId = getString(R.string.server_client_id)
 
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             .requestScopes(Scope(CalendarScopes.CALENDAR_READONLY))
-            .requestServerSideAccess(serverClientId)
+            .requestServerAuthCode(serverClientId)
             .build()
     }
     private val signInLauncher = registerForActivityResult(

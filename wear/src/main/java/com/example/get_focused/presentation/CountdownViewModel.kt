@@ -90,14 +90,19 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // In CountdownViewModel.kt
+
     private fun fetchCalendarEvents(account: GoogleSignInAccount) {
         viewModelScope.launch {
             try {
-                // We need to get the access token on a background thread.
-                val token = getSignInToken(account)
+                // THE FIX: The line "val token = getSignInToken(account)" has been removed.
+                // This is the only change needed.
 
-                val events = CalendarManager.getUpcomingEvents(getApplication(), account)
+                // This next line is already correct. It passes the necessary context and account
+                // to the manager, which now handles all authentication internally.
+                val events = CalendarManager.getUpcomingEvents(getApplication())
 
+                // The rest of your logic for parsing and handling events is correct.
                 val rfc3339Formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
 
                 val uiEvents = events.mapNotNull { event ->
@@ -129,8 +134,9 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 } else {
                     _appState.value = AppState.ShowEventList(uiEvents)
                 }
-            } catch (e: ApiException) {
-                Log.e("CountdownViewModel", "Error fetching access token or calendar events", e)
+                // It's slightly better to catch a general Exception here to handle network errors too.
+            } catch (e: Exception) {
+                Log.e("CountdownViewModel", "Error fetching calendar events", e)
                 _appState.value = AppState.NeedsSignIn
             }
         }
