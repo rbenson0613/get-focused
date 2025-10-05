@@ -17,6 +17,13 @@ android {
 
     }
 
+    packaging {
+        resources {
+            excludes.add("META-INF/INDEX.LIST")
+            excludes.add("META-INF/DEPENDENCIES")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -61,7 +68,15 @@ dependencies {
     implementation(libs.play.services.auth)
     implementation(libs.okhttp)
     implementation(libs.gson)
-    implementation(libs.bundles.google.api)
+    implementation(libs.google.api.client)
+    implementation(libs.google.http.client.android)
+    implementation(libs.google.http.client.gson)
+    implementation(libs.google.api.services.calendar)
+    implementation(libs.google.api.client.googleapis.extensions) {
+        exclude(group = "com.google.api.client")
+        exclude(group = "com.google.http-client")
+        exclude(group = "com.google.oauth-client")
+    }
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
