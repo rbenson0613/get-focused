@@ -1,53 +1,63 @@
 package com.example.get_focused.calendar
 
-import android.content.Context
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.api.client.extensions.android.http.AndroidHttp
-import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
-import com.google.api.client.json.gson.GsonFactory
-import com.google.api.services.calendar.Calendar
-import com.google.api.services.calendar.CalendarScopes
-import com.google.api.services.calendar.model.Event
+import android.util.Log
+import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.Collections
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.IOException
+import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 object CalendarManager {
 
-    private var calendarService: Calendar? = null
+    private const val TAG = "CalendarManager"
+    private val client = OkHttpClient()
+    private val gson = Gson()
 
-    fun initialize(context: Context, account: GoogleSignInAccount) {
-        val credential = GoogleAccountCredential.usingOAuth2(
-            context,
-            Collections.singleton(CalendarScopes.CALENDAR_READONLY)
-        ).setSelectedAccount(account.account)
+    suspend fun getUpcomingEvents(accessToken: String): List<CalendarEvent> {
+        // The Google Calendar API requires the time to be in RFC3339 format.
+        val timeMin = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.format(Date())
 
-        calendarService = Calendar.Builder(
-            AndroidHttp.newCompatibleTransport(),
-            GsonFactory.getDefaultInstance(),
-            credential
-        )
-            .setApplicationName("Get Focused")
+        val encodedTimeMin = URLEncoder.encode(timeMin, "UTF-8")
+
+        val url = "https://www.googleapis.com/calendar/v3/calendars/primary/events?" +
+                "maxResults=10&" +
+                "orderBy=startTime&" +
+                "singleEvents=true&" +
+                "timeMin=$encodedTimeMin"
+
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Authorization", "Bearer $accessToken")
             .build()
-    }
-
-    suspend fun getUpcomingEvents(): List<Event> {
-        val service = calendarService ?: return emptyList()
 
         return withContext(Dispatchers.IO) {
             try {
-                val now = com.google.api.client.util.DateTime(System.currentTimeMillis())
-                service.events().list("primary")
-                    .setMaxResults(10) // Fetch a list of up to 10 events
-                    .setTimeMin(now)
-                    .setOrderBy("startTime")
-                    .setSingleEvents(true)
-                    .execute()
-                    .items ?: emptyList()
-            } catch (e: Exception) {
-                // Log the error
-                e.printStackTrace()
-                emptyList()
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "Failed to fetch events: ${response.code} ${response.message}")
+                    return@withContext emptyList()
+                }
+
+                val responseBody = response.body?.string()
+                if (responseBody.isNullOrEmpty()) {
+                    Log.w(TAG, "Response body is null or empty.")
+                    return@withContext emptyList()
+                }
+
+                val eventList = gson.fromJson(responseBody, CalendarEventList::class.java)
+                return@withContext eventList.items
+
+            } catch (e: IOException) {
+                Log.e(TAG, "Error fetching calendar events", e)
+                return@withContext emptyList()
             }
         }
     }

@@ -7,18 +7,22 @@ import android.os.Build
 import android.os.CountDownTimer
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.get_focused.calendar.CalendarManager
 import com.example.get_focused.presentation.ui.UiEvent
 import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.api.services.calendar.CalendarScopes
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.Scope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import java.util.Timer
 import java.util.TimerTask
 import java.util.concurrent.TimeUnit
@@ -56,19 +60,42 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _appState.value = AppState.Loading
             val account = GoogleSignIn.getLastSignedInAccount(getApplication())
-            if (account != null && account.grantedScopes.any { it.scopeUri == CalendarScopes.CALENDAR_READONLY }) {
-                CalendarManager.initialize(getApplication(), account)
-                val events = CalendarManager.getUpcomingEvents()
+            if (account != null && GoogleSignIn.hasPermissions(account, Scope("https://www.googleapis.com/auth/calendar.readonly"))) {
+                fetchCalendarEvents(account)
+            } else {
+                _appState.value = AppState.NeedsSignIn
+            }
+        }
+    }
+
+    private fun fetchCalendarEvents(account: GoogleSignInAccount) {
+        viewModelScope.launch {
+            try {
+                // We need to get the access token on a background thread.
+                val token = withContext(Dispatchers.IO) {
+                    account.requestServerSideAccess(getClientId(), Scope("https://www.googleapis.com/auth/calendar.readonly"))
+                }
+
+                val events = CalendarManager.getUpcomingEvents(token.accessToken)
+
+                val rfc3339Formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
+
                 val uiEvents = events.mapNotNull { event ->
-                    val start = event.start?.dateTime?.value
-                    val end = event.end?.dateTime?.value
-                    if (start != null && end != null) {
-                        UiEvent(
-                            title = event.summary ?: "No Title",
-                            startTimeMillis = start,
-                            endTimeMillis = end
-                        )
-                    } else {
+                    try {
+                        val start = event.start?.dateTime?.let { rfc3339Formatter.parse(it)?.time }
+                        val end = event.end?.dateTime?.let { rfc3339Formatter.parse(it)?.time }
+
+                        if (start != null && end != null) {
+                            UiEvent(
+                                title = event.summary ?: "No Title",
+                                startTimeMillis = start,
+                                endTimeMillis = end
+                            )
+                        } else {
+                            null
+                        }
+                    } catch (e: Exception) {
+                        Log.e("CountdownViewModel", "Failed to parse date-time for event: ${event.summary}", e)
                         null
                     }
                 }
@@ -82,7 +109,8 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 } else {
                     _appState.value = AppState.ShowEventList(uiEvents)
                 }
-            } else {
+            } catch (e: ApiException) {
+                Log.e("CountdownViewModel", "Error fetching access token or calendar events", e)
                 _appState.value = AppState.NeedsSignIn
             }
         }
@@ -142,6 +170,13 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 checkSignInStatus()
             }
         }.start()
+    }
+
+    private fun getClientId(): String {
+        // IMPORTANT: Replace this with your own Web application client ID from the Google Cloud Console.
+        // This is required to get an access token to call the Google Calendar API.
+        // It should look like: "YOUR_CLIENT_ID.apps.googleusercontent.com"
+        return "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
     }
 
     private fun triggerNotification() {

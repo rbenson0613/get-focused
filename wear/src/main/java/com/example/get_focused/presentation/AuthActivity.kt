@@ -8,8 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
-import com.google.api.services.calendar.CalendarScopes
 import com.google.android.gms.common.api.Scope
+import com.google.api.services.calendar.CalendarScopes
 
 class AuthActivity : ComponentActivity() {
 
@@ -19,8 +19,6 @@ class AuthActivity : ComponentActivity() {
         if (result.resultCode == Activity.RESULT_OK) {
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
             try {
-                // The task is successful, which means the user has signed in.
-                // We don't need the account object here, just the success signal.
                 task.getResult(ApiException::class.java)
                 setResult(Activity.RESULT_OK)
                 finish()
@@ -41,7 +39,7 @@ class AuthActivity : ComponentActivity() {
 
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
-            .requestScopes(Scope(CalendarScopes.CALENDAR_READONLY))
+            .requestScopes(Scope("https://www.googleapis.com/auth/calendar.readonly"))
             .build()
 
         val googleSignInClient = GoogleSignIn.getClient(this, gso)
