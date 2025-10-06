@@ -26,8 +26,8 @@ object CalendarManager {
         }.format(Date())
 
         val encodedTimeMin = URLEncoder.encode(timeMin, "UTF-8")
-
-        val url = "https://www.googleapis.com/calendar/v3/calendars/primary/events?" +
+        // calendar.ronnie_s_agenda
+        val url = "https://www.googleapis.com/calendar/v3/calendars/calendar.ronnie_s_agenda/events?" +
                 "maxResults=10&" +
                 "orderBy=startTime&" +
                 "singleEvents=true&" +
