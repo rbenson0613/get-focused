@@ -54,7 +54,7 @@
         -->
         <meta-data
             android:name="com.google.android.wearable.standalone"
-            android:value="true" />
+            android:value="false" />
 
         <activity
             android:name=".presentation.MainActivity"
@@ -69,7 +69,7 @@
         </activity>
         <activity
             android:name=".presentation.AuthActivity"
-            android:exported="false" />
+            android:exported="true" />
     </application>
 
 </manifest>

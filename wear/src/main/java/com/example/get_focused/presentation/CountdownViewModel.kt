@@ -95,14 +95,8 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     private fun fetchCalendarEvents(account: GoogleSignInAccount) {
         viewModelScope.launch {
             try {
-                // THE FIX: The line "val token = getSignInToken(account)" has been removed.
-                // This is the only change needed.
-
-                // This next line is already correct. It passes the necessary context and account
-                // to the manager, which now handles all authentication internally.
                 val events = CalendarManager.getUpcomingEvents(getApplication())
 
-                // The rest of your logic for parsing and handling events is correct.
                 val rfc3339Formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
 
                 val uiEvents = events.mapNotNull { event ->

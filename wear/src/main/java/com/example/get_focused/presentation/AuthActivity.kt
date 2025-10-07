@@ -20,7 +20,7 @@ class AuthActivity : ComponentActivity() {
 
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
-            .requestScopes(Scope(CalendarScopes.CALENDAR_READONLY))
+         //   .requestScopes(Scope(CalendarScopes.CALENDAR_READONLY))
             .requestServerAuthCode(serverClientId)
             .build()
     }
@@ -34,7 +34,7 @@ class AuthActivity : ComponentActivity() {
                 setResult(Activity.RESULT_OK)
                 finish()
             } catch (e: ApiException) {
-                Log.e(TAG, "Sign-in failed after result OK", e)
+                Log.e(TAG, "Sign-in failed: code=${e.statusCode}, message=${e.message}", e)
                 setResult(Activity.RESULT_CANCELED)
                 finish()
             }
