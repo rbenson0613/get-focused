@@ -12,22 +12,21 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.get_focused.calendar.CalendarManager
 import com.example.get_focused.presentation.ui.UiEvent
+import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
 import java.util.Timer
 import java.util.TimerTask
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 sealed class AppState {
     object Loading : AppState()
@@ -70,32 +69,17 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    suspend fun getSignInToken(account: GoogleSignInAccount) {
-        // The auth code is now a simple property on the account object.
-        // It can be null if something went wrong or if it wasn't requested.
-        val authCode: String? = account.serverAuthCode
-
-        if (authCode != null) {
-            // Now you have the auth code. You would typically send this
-            // to your backend server, which then exchanges it for tokens.
-            // For your client-side-only app, you might not need this flow
-            // and can continue using GoogleAccountCredential as before.
-            Log.d("Auth", "Server Auth Code: $authCode")
-
-            // If your goal is just to make client-side calls, you still
-            // use GoogleAccountCredential, which handles token management internally.
-            // The requestServerSideAccess flow is primarily for backend integration.
-        } else {
-            Log.e("Auth", "Server Auth Code was null. Did you request it in GoogleSignInOptions?")
-        }
-    }
-
-    // In CountdownViewModel.kt
-
     private fun fetchCalendarEvents(account: GoogleSignInAccount) {
         viewModelScope.launch {
             try {
-                val events = CalendarManager.getUpcomingEvents(getApplication())
+                val accessToken = withContext(Dispatchers.IO) {
+                    GoogleAuthUtil.getToken(
+                        getApplication(),
+                        account.account!!,
+                        "oauth2:${Scope("https://www.googleapis.com/auth/calendar.readonly").scopeUri}"
+                    )
+                }
+                val events = CalendarManager.getUpcomingEvents(accessToken)
 
                 val rfc3339Formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
 
@@ -128,9 +112,8 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 } else {
                     _appState.value = AppState.ShowEventList(uiEvents)
                 }
-                // It's slightly better to catch a general Exception here to handle network errors too.
             } catch (e: Exception) {
-                Log.e("CountdownViewModel", "Error fetching calendar events", e)
+                Log.e("CountdownViewModel", "Error fetching calendar events or token", e)
                 _appState.value = AppState.NeedsSignIn
             }
         }
@@ -190,13 +173,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 checkSignInStatus()
             }
         }.start()
-    }
-
-    private fun getClientId(): String {
-        // IMPORTANT: Replace this with your own Web application client ID from the Google Cloud Console.
-        // This is required to get an access token to call the Google Calendar API.
-        // It should look like: "YOUR_CLIENT_ID.apps.googleusercontent.com"
-        return "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
     }
 
     private fun triggerNotification() {
