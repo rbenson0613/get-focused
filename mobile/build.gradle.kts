@@ -42,6 +42,18 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
+
+    // Google Sign-In and Calendar API dependencies
+    implementation(libs.play.services.auth)
+    implementation(libs.google.api.client)
+    implementation(libs.google.http.client.gson)
+    implementation(libs.google.api.services.calendar)
+    implementation(libs.google.api.client.googleapis.extensions) {
+        exclude(group = "com.google.api.client")
+        exclude(group = "com.google.http-client")
+        exclude(group = "com.google.oauth-client")
+    }
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

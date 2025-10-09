@@ -1,7 +1,10 @@
 package com.example.get_focused.presentation
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,6 +31,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
@@ -37,6 +41,7 @@ import com.example.get_focused.presentation.theme.Get_FocusedTheme
 import com.example.get_focused.presentation.ui.EventListScreen
 import com.example.get_focused.presentation.ui.SignInScreen
 import com.example.get_focused.presentation.ui.UiEvent
+import com.example.get_focused.sync.DataSyncService
 
 class MainActivity : ComponentActivity() {
     private val viewModel: CountdownViewModel by viewModels()
@@ -49,9 +54,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val syncReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == DataSyncService.ACTION_SYNC_EVENTS) {
+                viewModel.checkSignInStatus()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        LocalBroadcastManager.getInstance(this)
+            .registerReceiver(syncReceiver, IntentFilter(DataSyncService.ACTION_SYNC_EVENTS))
 
         setContent {
             val appState by viewModel.appState.collectAsState()
@@ -69,6 +85,11 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(syncReceiver)
     }
 }
 
