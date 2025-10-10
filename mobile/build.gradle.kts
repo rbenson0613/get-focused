@@ -45,6 +45,7 @@ dependencies {
 
     // Google Sign-In and Calendar API dependencies
     implementation(libs.play.services.auth)
+    implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.google.api.client)
     implementation(libs.google.http.client.gson)
     implementation(libs.google.api.services.calendar)

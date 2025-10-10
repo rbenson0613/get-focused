@@ -29,8 +29,10 @@ okhttp = "4.12.0"
 gson = "2.10.1"
 googleApiClient = "2.4.0"
 googleApiClientExtensions = "1.4.1-beta"
+kotlinxCoroutinesPlayServices = "1.8.1"
 
 [libraries]
+kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutinesPlayServices" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
