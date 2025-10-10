@@ -33,6 +33,13 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+    // Exclude duplicate META-INF files
+    packaging {
+        resources.excludes.add("META-INF/LICENSE")
+        resources.excludes.add("META-INF/LICENSE.txt")
+        resources.excludes.add("META-INF/NOTICE")
+        resources.excludes.add("META-INF/NOTICE.txt")
+    }
 }
 
 dependencies {
@@ -47,14 +54,6 @@ dependencies {
     implementation(libs.play.services.auth)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.bundles.google.calendar.api)
-
-    // Exclude duplicate META-INF files
-    packaging {
-        resources.excludes.add("META-INF/LICENSE")
-        resources.excludes.add("META-INF/LICENSE.txt")
-        resources.excludes.add("META-INF/NOTICE")
-        resources.excludes.add("META-INF/NOTICE.txt")
-    }
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
