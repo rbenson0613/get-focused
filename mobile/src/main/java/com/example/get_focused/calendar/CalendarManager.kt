@@ -16,6 +16,30 @@ object CalendarManager {
 
     private const val TAG = "CalendarManager"
 
+    suspend fun getUpcomingEvents(credential: GoogleAccountCredential): List<Event> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val transport = NetHttpTransport()
+                val jsonFactory = GsonFactory.getDefaultInstance()
+                val service = Calendar.Builder(transport, jsonFactory, credential)
+                    .setApplicationName("Get Focused")
+                    .build()
+
+                val now = DateTime(System.currentTimeMillis())
+                val events = service.events().list("primary")
+                    .setMaxResults(10)
+                    .setTimeMin(now)
+                    .setOrderBy("startTime")
+                    .setSingleEvents(true)
+                    .execute()
+                events.items ?: emptyList()
+            } catch (e: IOException) {
+                Log.e(TAG, "Error getting events", e)
+                emptyList()
+            }
+        }
+    }
+
     suspend fun createEvent(
         credential: GoogleAccountCredential,
         title: String,

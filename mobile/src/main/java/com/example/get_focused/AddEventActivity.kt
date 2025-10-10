@@ -27,7 +27,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class MainActivity : AppCompatActivity() {
+class AddEventActivity : AppCompatActivity() {
 
     private lateinit var eventTitle: EditText
     private lateinit var startTimeText: TextView
