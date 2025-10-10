@@ -33,12 +33,13 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
-    // Exclude duplicate META-INF files
     packaging {
         resources.excludes.add("META-INF/LICENSE")
         resources.excludes.add("META-INF/LICENSE.txt")
         resources.excludes.add("META-INF/NOTICE")
         resources.excludes.add("META-INF/NOTICE.txt")
+        resources.excludes.add("META-INF/DEPENDENCIES")
+        resources.excludes.add("META-INF/INDEX.LIST")
     }
 }
 
@@ -53,7 +54,7 @@ dependencies {
     // Google Sign-In and Calendar API dependencies
     implementation(libs.play.services.auth)
     implementation(libs.kotlinx.coroutines.play.services)
-    implementation(libs.bundles.google.calendar.api)
+    implementation(libs.bundles.google.api)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
