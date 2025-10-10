@@ -78,7 +78,9 @@ google-api-services-calendar = { group = "com.google.apis", name = "google-api-s
 
 [bundles]
 google-api = [
+    "google-api-client",
     "google-api-client-android",
+    "google-api-client-googleapis-extensions",
     "google-http-client-gson",
     "google-api-services-calendar"
 ]
