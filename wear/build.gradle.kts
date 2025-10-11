@@ -44,6 +44,14 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        resources.excludes.add("META-INF/LICENSE")
+        resources.excludes.add("META-INF/LICENSE.txt")
+        resources.excludes.add("META-INF/NOTICE")
+        resources.excludes.add("META-INF/NOTICE.txt")
+        resources.excludes.add("META-INF/DEPENDENCIES")
+        resources.excludes.add("META-INF/INDEX.LIST")
+    }
 }
 
 dependencies {
@@ -68,15 +76,7 @@ dependencies {
     implementation(libs.play.services.auth)
     implementation(libs.okhttp)
     implementation(libs.gson)
-    implementation(libs.google.api.client)
-    implementation(libs.google.http.client.android)
-    implementation(libs.google.http.client.gson)
-    implementation(libs.google.api.services.calendar)
-    implementation(libs.google.api.client.googleapis.extensions) {
-        exclude(group = "com.google.api.client")
-        exclude(group = "com.google.http-client")
-        exclude(group = "com.google.oauth-client")
-    }
+    implementation(libs.bundles.google.api)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
