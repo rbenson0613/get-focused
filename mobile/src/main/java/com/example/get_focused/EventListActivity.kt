@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.get_focused.calendar.CalendarManager
@@ -22,6 +23,7 @@ class EventListActivity : AppCompatActivity() {
 
     private lateinit var eventsRecyclerView: RecyclerView
     private lateinit var eventAdapter: EventAdapter
+    private var googleAccount: GoogleSignInAccount? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,10 +31,22 @@ class EventListActivity : AppCompatActivity() {
 
         eventsRecyclerView = findViewById(R.id.events_recycler_view)
         eventsRecyclerView.layoutManager = LinearLayoutManager(this)
+        val dividerItemDecoration = DividerItemDecoration(eventsRecyclerView.context,
+            (eventsRecyclerView.layoutManager as LinearLayoutManager).orientation)
+        dividerItemDecoration.setDrawable(resources.getDrawable(R.drawable.divider, null))
+        eventsRecyclerView.addItemDecoration(dividerItemDecoration)
 
         val addEventFab: com.google.android.material.floatingactionbutton.FloatingActionButton = findViewById(R.id.add_event_fab)
         addEventFab.setOnClickListener {
             startActivity(Intent(this, AddEventActivity::class.java))
+        }
+
+        val syncEventsFab: com.google.android.material.floatingactionbutton.FloatingActionButton = findViewById(R.id.sync_events_fab)
+        syncEventsFab.setOnClickListener {
+            googleAccount?.let {
+                fetchEvents(it)
+                showToast("Events synced!")
+            } ?: showToast("Please sign in first.")
         }
 
         requestSignIn()
@@ -53,6 +67,7 @@ class EventListActivity : AppCompatActivity() {
                 val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
                 try {
                     val account = task.result
+                    this.googleAccount = account
                     fetchEvents(account)
                 } catch (e: Exception) {
                     showToast("Sign-in failed. Please try again.")

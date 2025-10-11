@@ -33,14 +33,6 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
-    packaging {
-        resources.excludes.add("META-INF/LICENSE")
-        resources.excludes.add("META-INF/LICENSE.txt")
-        resources.excludes.add("META-INF/NOTICE")
-        resources.excludes.add("META-INF/NOTICE.txt")
-        resources.excludes.add("META-INF/DEPENDENCIES")
-        resources.excludes.add("META-INF/INDEX.LIST")
-    }
 }
 
 dependencies {
@@ -54,7 +46,14 @@ dependencies {
     // Google Sign-In and Calendar API dependencies
     implementation(libs.play.services.auth)
     implementation(libs.kotlinx.coroutines.play.services)
-    implementation(libs.bundles.google.api)
+    implementation(libs.google.api.client)
+    implementation(libs.google.http.client.gson)
+    implementation(libs.google.api.services.calendar)
+    implementation(libs.google.api.client.googleapis.extensions) {
+        exclude(group = "com.google.api.client")
+        exclude(group = "com.google.http-client")
+        exclude(group = "com.google.oauth-client")
+    }
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

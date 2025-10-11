@@ -5,4 +5,6 @@
     <string name="start_time_label">Start Time</string>
     <string name="end_time_label">End Time</string>
     <string name="create_event_button">Create Event</string>
+    <string name="upcoming_events">Upcoming Events</string>
+    <string name="sync_events">Sync Events</string>
 </resources>
