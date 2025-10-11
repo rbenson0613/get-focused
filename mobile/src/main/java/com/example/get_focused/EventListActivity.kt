@@ -41,7 +41,7 @@ class EventListActivity : AppCompatActivity() {
     private fun requestSignIn() {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
-            .requestScopes(Scope(CalendarScopes.CALENDAR_READONLY))
+            .requestScopes(Scope(CalendarScopes.CALENDAR))
             .build()
         val googleSignInClient = GoogleSignIn.getClient(this, gso)
         signInLauncher.launch(googleSignInClient.signInIntent)
@@ -63,7 +63,7 @@ class EventListActivity : AppCompatActivity() {
     private fun fetchEvents(account: GoogleSignInAccount) {
         val credential = GoogleAccountCredential.usingOAuth2(
             this,
-            listOf(CalendarScopes.CALENDAR_READONLY)
+            listOf(CalendarScopes.CALENDAR)
         ).setSelectedAccount(account.account)
 
         lifecycleScope.launch {
