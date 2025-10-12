@@ -26,7 +26,7 @@ object CalendarManager {
                     .build()
 
                 val now = DateTime(System.currentTimeMillis())
-                val events = service.events().list("primary")
+                val events = service.events().list("leumnhji95vr7sf7k4msgqskqk@group.calendar.google.com")
                     .setMaxResults(10)
                     .setTimeMin(now)
                     .setOrderBy("startTime")
@@ -60,7 +60,7 @@ object CalendarManager {
                     end = EventDateTime().setDateTime(DateTime(endTime))
                 }
 
-                service.events().insert("primary", event).execute()
+                service.events().insert("leumnhji95vr7sf7k4msgqskqk@group.calendar.google.com", event).execute()
                 true
             } catch (e: IOException) {
                 Log.e(TAG, "Error creating event", e)

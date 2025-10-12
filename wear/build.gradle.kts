@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.get_focused"
+    namespace = "com.example.get_focused.wear"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.get_focused"
+        applicationId = "com.example.get_focused.wear"
         minSdk = 30
         targetSdk = 36
         versionCode = 1
@@ -76,5 +76,4 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.tiles.tooling)
-    wearApp(project(":wear"))
 }

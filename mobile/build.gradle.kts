@@ -33,6 +33,14 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+    packaging {
+        resources.excludes.add("META-INF/LICENSE")
+        resources.excludes.add("META-INF/LICENSE.txt")
+        resources.excludes.add("META-INF/NOTICE")
+        resources.excludes.add("META-INF/NOTICE.txt")
+        resources.excludes.add("META-INF/DEPENDENCIES")
+        resources.excludes.add("META-INF/INDEX.LIST")
+    }
 }
 
 dependencies {
@@ -49,11 +57,7 @@ dependencies {
     implementation(libs.google.api.client)
     implementation(libs.google.http.client.gson)
     implementation(libs.google.api.services.calendar)
-    implementation(libs.google.api.client.googleapis.extensions) {
-        exclude(group = "com.google.api.client")
-        exclude(group = "com.google.http-client")
-        exclude(group = "com.google.oauth-client")
-    }
+    implementation(libs.google.api.client.android)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

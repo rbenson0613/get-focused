@@ -27,7 +27,7 @@ object CalendarManager {
 
         val encodedTimeMin = URLEncoder.encode(timeMin, "UTF-8")
         // Use "primary" to fetch events from the user's primary calendar.
-        val url = "https://www.googleapis.com/calendar/v3/calendars/primary/events?" +
+        val url = "https://www.googleapis.com/calendar/v3/calendars/leumnhji95vr7sf7k4msgqskqk@group.calendar.google.com/events?" +
                 "maxResults=10&" +
                 "orderBy=startTime&" +
                 "singleEvents=true&" +
