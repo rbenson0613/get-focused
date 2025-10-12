@@ -70,8 +70,8 @@ google-api-client = { group = "com.google.api-client", name = "google-api-client
 google-api-client-googleapis-extensions = { group = "com.google.api.client", name = "google-api-client-googleapis-extensions", version.ref = "googleApiClientExtensions" }
 google-http-client-android = { module = "com.google.http-client:google-http-client-android", version = "1.44.2" }
 google-http-client-gson = { module = "com.google.http-client:google-http-client-gson", version = "1.44.2" }
-# --- ADD THIS LINE ---
 google-api-services-calendar = { group = "com.google.apis", name = "google-api-services-calendar", version = "v3-rev20220715-2.0.0" }
+androidx-localbroadcastmanager = { group = "androidx.localbroadcastmanager", name = "localbroadcastmanager", version = "1.1.0" }
 
 
 [bundles]
@@ -80,7 +80,7 @@ google-api = [
     "google-http-client-android",
     "google-api-client-googleapis-extensions",
     "google-http-client-gson",
-    "google-api-services-calendar" # <-- ADD THIS LINE TO THE BUNDLE
+    "google-api-services-calendar"
 ]
 
 
