@@ -17,7 +17,7 @@ class AuthActivity : ComponentActivity() {
     private val googleSignInOptions: GoogleSignInOptions by lazy {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
-            .requestScopes(Scope(CalendarScopes.CALENDAR_READONLY))
+            .requestScopes(Scope(CalendarScopes.CALENDAR))
             .build()
     }
     private val signInLauncher = registerForActivityResult(
