@@ -16,13 +16,10 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
-import com.google.android.gms.wearable.MessageClient
-import com.google.android.gms.wearable.NodeClient
-import com.google.android.gms.wearable.Wearable
+import com.example.get_focused.sync.SyncManager
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.services.calendar.CalendarScopes
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -38,9 +35,6 @@ class AddEventActivity : AppCompatActivity() {
     private val endCalendar = Calendar.getInstance()
 
     private val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
-
-    private val messageClient: MessageClient by lazy { Wearable.getMessageClient(this) }
-    private val nodeClient: NodeClient by lazy { Wearable.getNodeClient(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -149,28 +143,10 @@ class AddEventActivity : AppCompatActivity() {
             )
             if (success) {
                 showToast("Event created successfully!")
-                notifyWatchToSync()
+                setResult(Activity.RESULT_OK)
+                finish()
             } else {
                 showToast("Failed to create event.")
-            }
-        }
-    }
-
-    private fun notifyWatchToSync() {
-        lifecycleScope.launch {
-            try {
-                val nodes = nodeClient.connectedNodes.await()
-                nodes.forEach { node ->
-                    messageClient.sendMessage(node.id, "/sync-events", ByteArray(0))
-                        .addOnSuccessListener {
-                            Log.d("MainActivity", "Sync message sent to ${node.displayName}")
-                        }
-                        .addOnFailureListener {
-                            Log.e("MainActivity", "Failed to send sync message", it)
-                        }
-                }
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Error getting connected nodes", e)
             }
         }
     }

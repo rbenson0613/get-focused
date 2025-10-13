@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.get_focused.calendar.CalendarManager
+import com.example.get_focused.sync.SyncManager
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -24,6 +25,7 @@ class EventListActivity : AppCompatActivity() {
     private lateinit var eventsRecyclerView: RecyclerView
     private lateinit var eventAdapter: EventAdapter
     private var googleAccount: GoogleSignInAccount? = null
+    private val syncManager: SyncManager by lazy { SyncManager(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,7 +40,7 @@ class EventListActivity : AppCompatActivity() {
 
         val addEventFab: com.google.android.material.floatingactionbutton.FloatingActionButton = findViewById(R.id.add_event_fab)
         addEventFab.setOnClickListener {
-            startActivity(Intent(this, AddEventActivity::class.java))
+            addEventLauncher.launch(Intent(this, AddEventActivity::class.java))
         }
 
         val syncEventsFab: com.google.android.material.floatingactionbutton.FloatingActionButton = findViewById(R.id.sync_events_fab)
@@ -75,6 +77,13 @@ class EventListActivity : AppCompatActivity() {
             }
         }
 
+    private val addEventLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                googleAccount?.let { fetchEvents(it) }
+            }
+        }
+
     private fun fetchEvents(account: GoogleSignInAccount) {
         val credential = GoogleAccountCredential.usingOAuth2(
             this,
@@ -85,6 +94,7 @@ class EventListActivity : AppCompatActivity() {
             val events = CalendarManager.getUpcomingEvents(credential)
             eventAdapter = EventAdapter(events)
             eventsRecyclerView.adapter = eventAdapter
+            syncManager.requestSync()
         }
     }
 
