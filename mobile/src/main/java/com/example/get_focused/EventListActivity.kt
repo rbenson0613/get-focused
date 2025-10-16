@@ -15,6 +15,7 @@ import com.example.get_focused.sync.SyncManager
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.services.calendar.CalendarScopes
@@ -51,7 +52,13 @@ class EventListActivity : AppCompatActivity() {
             } ?: showToast("Please sign in first.")
         }
 
-        requestSignIn()
+        val account = GoogleSignIn.getLastSignedInAccount(this)
+        if (account == null) {
+            requestSignIn()
+        } else {
+            this.googleAccount = account
+            fetchEvents(account)
+        }
     }
 
     private fun requestSignIn() {
@@ -68,10 +75,10 @@ class EventListActivity : AppCompatActivity() {
             if (result.resultCode == Activity.RESULT_OK) {
                 val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
                 try {
-                    val account = task.result
+                    val account = task.getResult(ApiException::class.java)!!
                     this.googleAccount = account
                     fetchEvents(account)
-                } catch (e: Exception) {
+                } catch (e: ApiException) {
                     showToast("Sign-in failed. Please try again.")
                 }
             }
