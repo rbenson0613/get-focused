@@ -28,7 +28,7 @@ object CalendarManager {
 
                 Log.d(TAG, "getUpcomingEvents: querying events from primary calendar")
                 val now = DateTime(System.currentTimeMillis())
-                val events = service.events().list("primary")
+                val events = service.events().list("leumnhji95vr7sf7k4msgqskqk@group.calendar.google.com")
                     .setTimeMin(now)
                     .setOrderBy("startTime")
                     .setSingleEvents(true)
