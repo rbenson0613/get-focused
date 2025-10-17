@@ -26,9 +26,6 @@ import com.google.api.services.calendar.CalendarScopes
 import androidx.recyclerview.widget.RecyclerView
 
 
-// If you need Calendar scope constant, we use the raw scope URL:
-private const val CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events"
-
 class EventListActivity : AppCompatActivity() {
 
     private val TAG = "EventListActivity"
@@ -85,7 +82,7 @@ class EventListActivity : AppCompatActivity() {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             // add the calendar events scope; adjust if you need a different calendar scope
-            .requestScopes(Scope(CALENDAR_EVENTS_SCOPE))
+            .requestScopes(Scope(CalendarScopes.CALENDAR))
             .build()
 
         googleSignInClient = GoogleSignIn.getClient(this, gso)
