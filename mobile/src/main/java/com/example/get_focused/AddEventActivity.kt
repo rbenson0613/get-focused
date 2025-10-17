@@ -97,13 +97,13 @@ class AddEventActivity : AppCompatActivity() {
     }
 
     private fun hasCalendarPermissions(account: GoogleSignInAccount): Boolean {
-        return GoogleSignIn.hasPermissions(account, Scope(CalendarScopes.CALENDAR_EVENTS))
+        return GoogleSignIn.hasPermissions(account, Scope(CalendarScopes.CALENDAR))
     }
 
     private fun requestSignIn() {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
-            .requestScopes(Scope(CalendarScopes.CALENDAR_EVENTS))
+            .requestScopes(Scope(CalendarScopes.CALENDAR))
             .build()
         val googleSignInClient = GoogleSignIn.getClient(this, gso)
         signInLauncher.launch(googleSignInClient.signInIntent)
@@ -131,7 +131,7 @@ class AddEventActivity : AppCompatActivity() {
 
         val credential = GoogleAccountCredential.usingOAuth2(
             this,
-            listOf(CalendarScopes.CALENDAR_EVENTS)
+            listOf(CalendarScopes.CALENDAR)
         ).setSelectedAccount(account.account)
 
         lifecycleScope.launch {
