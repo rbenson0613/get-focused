@@ -1,6 +1,7 @@
 package com.example.get_focused
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -109,7 +110,11 @@ class EventListActivity : AppCompatActivity() {
             }
         }
 
-        // ... rest of your onCreate (recycler view setup, etc.)
+        val addEventFab: FloatingActionButton = findViewById(R.id.add_event_fab)
+        addEventFab.setOnClickListener {
+            val intent = Intent(this, AddEventActivity::class.java)
+            addEventLauncher.launch(intent)
+        }
     }
 
     private fun attemptSilentSignIn() {
