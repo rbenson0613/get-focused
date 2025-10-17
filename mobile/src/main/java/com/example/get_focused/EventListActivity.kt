@@ -13,6 +13,8 @@ import com.google.android.gms.common.api.ApiException
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.DividerItemDecoration
+import androidx.recyclerview.widget.LinearLayoutManager
 
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
@@ -65,7 +67,18 @@ class EventListActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_event_list)
+
+        // --- Setup RecyclerView ---
         eventsRecyclerView = findViewById(R.id.events_recycler_view)
+        eventsRecyclerView.layoutManager = LinearLayoutManager(this)
+
+        // Add a divider
+        val dividerItemDecoration = DividerItemDecoration(
+            eventsRecyclerView.context,
+            (eventsRecyclerView.layoutManager as LinearLayoutManager).orientation
+        )
+        eventsRecyclerView.addItemDecoration(dividerItemDecoration)
+
 
         // --- Build GoogleSignInOptions with Calendar events scope and email ---
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
