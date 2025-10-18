@@ -1,6 +1,7 @@
 package com.example.get_focused
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -13,6 +14,8 @@ import com.google.android.gms.common.api.ApiException
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.DividerItemDecoration
+import androidx.recyclerview.widget.LinearLayoutManager
 
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
@@ -22,9 +25,6 @@ import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccoun
 import com.google.api.services.calendar.CalendarScopes
 import androidx.recyclerview.widget.RecyclerView
 
-
-// If you need Calendar scope constant, we use the raw scope URL:
-private const val CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events"
 
 class EventListActivity : AppCompatActivity() {
 
@@ -65,13 +65,24 @@ class EventListActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_event_list)
+
+        // --- Setup RecyclerView ---
         eventsRecyclerView = findViewById(R.id.events_recycler_view)
+        eventsRecyclerView.layoutManager = LinearLayoutManager(this)
+
+        // Add a divider
+        val dividerItemDecoration = DividerItemDecoration(
+            eventsRecyclerView.context,
+            (eventsRecyclerView.layoutManager as LinearLayoutManager).orientation
+        )
+        eventsRecyclerView.addItemDecoration(dividerItemDecoration)
+
 
         // --- Build GoogleSignInOptions with Calendar events scope and email ---
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             // add the calendar events scope; adjust if you need a different calendar scope
-            .requestScopes(Scope(CALENDAR_EVENTS_SCOPE))
+            .requestScopes(Scope(CalendarScopes.CALENDAR))
             .build()
 
         googleSignInClient = GoogleSignIn.getClient(this, gso)
@@ -96,7 +107,11 @@ class EventListActivity : AppCompatActivity() {
             }
         }
 
-        // ... rest of your onCreate (recycler view setup, etc.)
+        val addEventFab: FloatingActionButton = findViewById(R.id.add_event_fab)
+        addEventFab.setOnClickListener {
+            val intent = Intent(this, AddEventActivity::class.java)
+            addEventLauncher.launch(intent)
+        }
     }
 
     private fun attemptSilentSignIn() {
