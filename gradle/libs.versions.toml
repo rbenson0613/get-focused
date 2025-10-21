@@ -30,6 +30,7 @@ gson = "2.10.1"
 googleApiClient = "2.4.0"
 googleApiClientExtensions = "1.4.1-beta"
 kotlinxCoroutinesPlayServices = "1.8.1"
+kotlinxSerialization = "1.6.3"
 
 [libraries]
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutinesPlayServices" }
@@ -72,7 +73,7 @@ google-http-client-android = { module = "com.google.http-client:google-http-clie
 google-http-client-gson = { module = "com.google.http-client:google-http-client-gson", version = "1.44.2" }
 google-api-services-calendar = { group = "com.google.apis", name = "google-api-services-calendar", version = "v3-rev20220715-2.0.0" }
 androidx-localbroadcastmanager = { group = "androidx.localbroadcastmanager", name = "localbroadcastmanager", version = "1.1.0" }
-
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
 [bundles]
 google-api = [
@@ -88,3 +89,4 @@ google-api = [
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

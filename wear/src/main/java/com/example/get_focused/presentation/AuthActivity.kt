@@ -10,7 +10,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.google.api.services.calendar.CalendarScopes
-import com.example.get_focused.wear.R
+import com.example.get_focused.R
 
 class AuthActivity : ComponentActivity() {
 

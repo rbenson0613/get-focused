@@ -21,6 +21,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.example.get_focused.calendar.CalendarManager
 import com.example.get_focused.sync.SyncManager
+import com.example.get_focused.sync.SyncedEvent
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.services.calendar.CalendarScopes
 import androidx.recyclerview.widget.RecyclerView
@@ -212,10 +213,23 @@ class EventListActivity : AppCompatActivity() {
                     Log.d(TAG, "Adapter created with ${events.size} events")
                 }
 
-                // If you need to push a sync-to-device message:
+                // ✅ Convert the google Event list to a list of SyncedEvent
+                val syncedEvents = events.mapNotNull { event ->
+                    // An event must have an ID to be syncable
+                    event.id?.let { id ->
+                        SyncedEvent(
+                            id = id,
+                            title = event.summary ?: "(No Title)",
+                            startTime = event.start?.dateTime?.value ?: event.start?.date?.value ?: 0L,
+                            endTime = event.end?.dateTime?.value ?: event.end?.date?.value
+                        )
+                    }
+                }
+
+                // ✅ Pass the converted list to the sync manager
                 try {
-                    syncManager.requestSync()
-                    Log.d(TAG, "syncManager.requestSync() called")
+                    syncManager.requestSync(syncedEvents)
+                    Log.d(TAG, "syncManager.requestSync() called with ${syncedEvents.size} events")
                 } catch (e: Exception) {
                     Log.w(TAG, "syncManager.requestSync() failed", e)
                 }

@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.get_focused.wear"
+    namespace = "com.example.get_focused"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.get_focused.wear"
+        applicationId = "com.example.get_focused"
         minSdk = 30
         targetSdk = 36
         versionCode = 1

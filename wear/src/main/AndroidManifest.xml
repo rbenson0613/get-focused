@@ -71,18 +71,6 @@
         <activity
             android:name="com.example.get_focused.presentation.AuthActivity"
             android:exported="true" />
-
-        <service
-            android:name="com.example.get_focused.sync.DataSyncService"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
-                <data
-                    android:host="*"
-                    android:pathPrefix="/sync-events"
-                    android:scheme="wear" />
-            </intent-filter>
-        </service>
     </application>
 
 </manifest>

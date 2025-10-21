@@ -1,12 +1,28 @@
 package com.example.get_focused.presentation
 
+import android.os.Bundle
+import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import com.google.android.gms.wearable.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import com.example.get_focused.sync.SyncedEvent
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromString
+
+import android.content.Intent
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.google.android.gms.wearable.MessageClient
+import com.google.android.gms.wearable.MessageEvent
+import com.google.android.gms.wearable.Wearable
+
 import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
 import android.content.IntentFilter
-import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -31,7 +47,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
@@ -43,7 +58,9 @@ import com.example.get_focused.presentation.ui.SignInScreen
 import com.example.get_focused.presentation.ui.UiEvent
 import com.example.get_focused.sync.DataSyncService
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
+
+    private val TAG = "MainActivityWear"
     private val viewModel: CountdownViewModel by viewModels()
 
     private val authLauncher = registerForActivityResult(
@@ -87,9 +104,103 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        Log.d(TAG, "DataClient listener registered")
+        Wearable.getDataClient(this).addListener(this)
+
+        // Also fetch any missed items from when the app wasn’t active
+        checkPendingDataItems()
+    }
+
+    override fun onPause() {
+        Log.d(TAG, "DataClient listener unregistered")
+        Wearable.getDataClient(this).removeListener(this)
+        super.onPause()
+    }
+
+    override fun onDataChanged(dataEvents: DataEventBuffer) {
+        for (event in dataEvents) {
+            if (event.type == DataEvent.TYPE_CHANGED &&
+                event.dataItem.uri.path == "/sync-events") {
+
+                val dataMapItem = DataMapItem.fromDataItem(event.dataItem)
+                handleSyncDataMap(dataMapItem.dataMap)
+            }
+        }
+    }
+
+
+    private fun handleSyncDataMap(dataMap: DataMap) {
+        val timestamp = dataMap.getLong("timestamp", 0L)
+        val eventCount = dataMap.getInt("event_count", -1)
+        val eventsJson = dataMap.getString("events_json")
+
+        Log.d(TAG, "Received sync data: timestamp=$timestamp, eventCount=$eventCount")
+
+        if (eventsJson != null) {
+            try {
+                // Deserialize the events
+                val syncedEvents = Json.decodeFromString<List<SyncedEvent>>(eventsJson)
+                Log.d(TAG, "Successfully parsed ${syncedEvents.size} events")
+
+                // Convert to UiEvents and process them
+                val uiEvents = syncedEvents.mapNotNull { event ->
+                    val endTime = event.endTime
+                    if (endTime != null) {
+                        UiEvent(
+                            title = event.title,
+                            startTimeMillis = event.startTime,
+                            endTimeMillis = endTime
+                        )
+                    } else {
+                        null
+                    }
+                }
+
+                // Process events the same way as fetchCalendarEvents does
+                val now = System.currentTimeMillis()
+                val activeEvent = uiEvents.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
+
+                if (activeEvent != null) {
+                    // There's an active event, start countdown
+                    Log.d(TAG, "Found active event: ${activeEvent.title}")
+                    viewModel.startCountdownForEvent(activeEvent)
+                } else {
+                    // No active event, show the event list
+                    Log.d(TAG, "No active event, updating event list")
+                    viewModel.updateEventList(uiEvents)
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse events JSON", e)
+            }
+        } else {
+            Log.w(TAG, "events_json was null in DataMap")
+        }
+    }
+
+    private fun checkPendingDataItems() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val items = Wearable.getDataClient(this@MainActivity).getDataItems().await()
+                for (item in items) {
+                    if (item.uri.path == "/sync-events") {
+                        val dataMapItem = DataMapItem.fromDataItem(item)
+                        handleSyncDataMap(dataMapItem.dataMap)
+
+                        // optional cleanup
+                        // Wearable.getDataClient(this@MainActivityWear).deleteDataItems(item.uri).await()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "checkPendingDataItems failed", e)
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(syncReceiver)
     }
 }
 
