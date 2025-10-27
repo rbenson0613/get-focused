@@ -1,10 +1,13 @@
 package com.example.get_focused.presentation
 
 import android.app.Application
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.media.RingtoneManager
 import android.os.Build
-import android.os.CountDownTimer
+import android.os.IBinder
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
@@ -59,15 +62,36 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     private val _appState = MutableStateFlow<AppState>(AppState.Loading)
     val appState = _appState.asStateFlow()
 
-    private var countdownTimer: CountDownTimer? = null
+    private var timerService: TimerService? = null
+    private var isBound = false
     private var eventStartTimer: Timer? = null
     private var clockTimer: Timer? = null
     private val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
     private val _currentTime = MutableStateFlow(timeFormatter.format(Date()))
 
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(className: ComponentName, service: IBinder) {
+            val binder = service as TimerService.TimerBinder
+            timerService = binder.getService()
+            isBound = true
+            viewModelScope.launch {
+                timerService?.timerState?.collect { state ->
+                    handleTimerState(state)
+                }
+            }
+        }
+
+        override fun onServiceDisconnected(arg0: ComponentName) {
+            isBound = false
+        }
+    }
+
     init {
         startClock()
         checkSignInStatus()
+        Intent(application, TimerService::class.java).also { intent ->
+            application.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        }
     }
 
     fun checkSignInStatus() {
@@ -232,7 +256,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun startCountdownForEvent(event: UiEvent) {
-        countdownTimer?.cancel()
         eventStartTimer?.cancel()
 
         val now = System.currentTimeMillis()
@@ -245,14 +268,12 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
 
         if (now < event.startTimeMillis) {
             _appState.value = AppState.WaitingForEvent(_currentTime.value, event.title)
-
             eventStartTimer = Timer()
             eventStartTimer?.schedule(object : TimerTask() {
                 override fun run() {
                     startCountdown(durationMillis, event.title)
                 }
             }, event.startTimeMillis - now)
-
         } else {
             val remainingDuration = event.endTimeMillis - now
             if (remainingDuration > 0) {
@@ -264,27 +285,41 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun startCountdown(durationMillis: Long, eventTitle: String) {
-        countdownTimer?.cancel()
-        countdownTimer = object : CountDownTimer(durationMillis, 1000) {
-            override fun onTick(millisUntilFinished: Long) {
-                val minutes = TimeUnit.MILLISECONDS.toMinutes(millisUntilFinished)
-                val seconds = TimeUnit.MILLISECONDS.toSeconds(millisUntilFinished) % 60
-                val timeString = String.format("%02d:%02d", minutes, seconds)
-                val progress = millisUntilFinished.toFloat() / durationMillis
+        val intent = Intent(getApplication(), TimerService::class.java).apply {
+            action = TimerService.ACTION_START
+            putExtra(TimerService.EXTRA_DURATION_MS, durationMillis)
+        }
+        getApplication<Application>().startService(intent)
+    }
 
+    private fun handleTimerState(state: TimerService.TimerState) {
+        val currentState = appState.value
+        val eventTitle = when (currentState) {
+            is AppState.ShowCountdown -> currentState.eventTitle
+            is AppState.WaitingForEvent -> currentState.eventTitle
+            else -> ""
+        }
+
+        when (state) {
+            is TimerService.TimerState.Counting -> {
+                val minutes = TimeUnit.MILLISECONDS.toMinutes(state.remainingTime)
+                val seconds = TimeUnit.MILLISECONDS.toSeconds(state.remainingTime) % 60
+                val timeString = String.format("%02d:%02d", minutes, seconds)
                 _appState.value = AppState.ShowCountdown(
-                    progress = progress,
+                    progress = state.progress,
                     time = timeString,
                     currentTime = _currentTime.value,
                     eventTitle = eventTitle
                 )
             }
-
-            override fun onFinish() {
+            TimerService.TimerState.Finished -> {
                 triggerNotification()
                 checkSignInStatus()
             }
-        }.start()
+            TimerService.TimerState.Idle -> {
+                // No need to do anything
+            }
+        }
     }
 
     private fun getClientId(): String {
@@ -322,7 +357,10 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
 
     override fun onCleared() {
         super.onCleared()
-        countdownTimer?.cancel()
+        if (isBound) {
+            getApplication<Application>().unbindService(connection)
+            isBound = false
+        }
         eventStartTimer?.cancel()
         clockTimer?.cancel()
     }
