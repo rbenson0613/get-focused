@@ -28,13 +28,14 @@ class TimerService : Service() {
         const val ACTION_START = "com.example.get_focused.presentation.START"
         const val ACTION_STOP = "com.example.get_focused.presentation.STOP"
         const val EXTRA_DURATION_MS = "com.example.get_focused.presentation.EXTRA_DURATION_MS"
+        const val EXTRA_EVENT_TITLE = "com.example.get_focused.presentation.EXTRA_EVENT_TITLE"
         private const val NOTIFICATION_ID = 1
         private const val NOTIFICATION_CHANNEL_ID = "TimerServiceChannel"
     }
 
     sealed class TimerState {
         object Idle : TimerState()
-        data class Counting(val remainingTime: Long, val progress: Float) : TimerState()
+        data class Counting(val remainingTime: Long, val progress: Float, val eventTitle: String) : TimerState()
         object Finished : TimerState()
     }
 
@@ -48,9 +49,10 @@ class TimerService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 val duration = intent.getLongExtra(EXTRA_DURATION_MS, 0)
+                val eventTitle = intent.getStringExtra(EXTRA_EVENT_TITLE) ?: ""
                 if (duration > 0) {
                     startForegroundService()
-                    startCountdown(duration)
+                    startCountdown(duration, eventTitle)
                 }
             }
             ACTION_STOP -> {
@@ -61,14 +63,15 @@ class TimerService : Service() {
         return START_STICKY
     }
 
-    private fun startCountdown(durationMs: Long) {
+    private fun startCountdown(durationMs: Long, eventTitle: String) {
         countdownJob?.cancel()
         countdownJob = serviceScope.launch {
             val totalDuration = durationMs
             var remainingTime = totalDuration
-            while (remainingTime > 0) {
-                val progress = remainingTime.toFloat() / totalDuration
-                _timerState.value = TimerState.Counting(remainingTime, progress)
+            while (remainingTime >= 0) {
+                val elapsedTime = totalDuration - remainingTime
+                val progress = elapsedTime.toFloat() / totalDuration
+                _timerState.value = TimerState.Counting(remainingTime, progress, eventTitle)
                 delay(1000)
                 remainingTime -= 1000
             }

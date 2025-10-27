@@ -47,6 +47,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
@@ -98,6 +99,9 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                     },
                     onEventClick = { event ->
                         viewModel.startCountdownForEvent(event)
+                    },
+                    onStopClick = {
+                        viewModel.stopCountdown()
                     }
                 )
             }
@@ -215,7 +219,8 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 fun WearApp(
     appState: AppState,
     onSignInClick: () -> Unit,
-    onEventClick: (UiEvent) -> Unit
+    onEventClick: (UiEvent) -> Unit,
+    onStopClick: () -> Unit
 ) {
     when (appState) {
         is AppState.Loading -> {
@@ -242,7 +247,8 @@ fun WearApp(
                 progress = appState.progress,
                 time = appState.time,
                 currentTime = appState.currentTime,
-                eventTitle = appState.eventTitle
+                eventTitle = appState.eventTitle,
+                onStopClick = onStopClick
             )
         }
     }
@@ -253,7 +259,8 @@ fun CountdownScreen(
     progress: Float,
     time: String,
     currentTime: String,
-    eventTitle: String
+    eventTitle: String,
+    onStopClick: () -> Unit
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -295,6 +302,10 @@ fun CountdownScreen(
                     contentDescription = "Coffee break icon",
                     modifier = Modifier.size(38.dp)
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = onStopClick) {
+                    Text("Stop")
+                }
             }
 
             Text(
@@ -315,7 +326,7 @@ fun CountdownScreen(
 @Composable
 fun NeedsSignInPreview() {
     Get_FocusedTheme {
-        WearApp(appState = AppState.NeedsSignIn, onSignInClick = {}, onEventClick = {})
+        WearApp(appState = AppState.NeedsSignIn, onSignInClick = {}, onEventClick = {}, onStopClick = {})
     }
 }
 
@@ -331,7 +342,8 @@ fun EventListPreview() {
                 )
             ),
             onSignInClick = {},
-            onEventClick = {}
+            onEventClick = {},
+            onStopClick = {}
         )
     }
 }
@@ -346,7 +358,8 @@ fun WaitingForEventPreview() {
                 eventTitle = "Team Lunch"
             ),
             onSignInClick = {},
-            onEventClick = {}
+            onEventClick = {},
+            onStopClick = {}
         )
     }
 }
@@ -363,7 +376,8 @@ fun CountdownPreview() {
                 eventTitle = "Coffee Break"
             ),
             onSignInClick = {},
-            onEventClick = {}
+            onEventClick = {},
+            onStopClick = {}
         )
     }
 }

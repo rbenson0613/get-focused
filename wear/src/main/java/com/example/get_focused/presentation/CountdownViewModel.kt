@@ -288,18 +288,12 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         val intent = Intent(getApplication(), TimerService::class.java).apply {
             action = TimerService.ACTION_START
             putExtra(TimerService.EXTRA_DURATION_MS, durationMillis)
+            putExtra(TimerService.EXTRA_EVENT_TITLE, eventTitle)
         }
         getApplication<Application>().startService(intent)
     }
 
     private fun handleTimerState(state: TimerService.TimerState) {
-        val currentState = appState.value
-        val eventTitle = when (currentState) {
-            is AppState.ShowCountdown -> currentState.eventTitle
-            is AppState.WaitingForEvent -> currentState.eventTitle
-            else -> ""
-        }
-
         when (state) {
             is TimerService.TimerState.Counting -> {
                 val minutes = TimeUnit.MILLISECONDS.toMinutes(state.remainingTime)
@@ -309,7 +303,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                     progress = state.progress,
                     time = timeString,
                     currentTime = _currentTime.value,
-                    eventTitle = eventTitle
+                    eventTitle = state.eventTitle
                 )
             }
             TimerService.TimerState.Finished -> {
@@ -317,9 +311,16 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 checkSignInStatus()
             }
             TimerService.TimerState.Idle -> {
-                // No need to do anything
+                checkSignInStatus()
             }
         }
+    }
+
+    fun stopCountdown() {
+        val intent = Intent(getApplication(), TimerService::class.java).apply {
+            action = TimerService.ACTION_STOP
+        }
+        getApplication<Application>().startService(intent)
     }
 
     private fun getClientId(): String {
