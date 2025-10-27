@@ -19,7 +19,6 @@ data class SyncedEvent(
     val endTime: Long? = null
 )
 
-class SyncManager(private val context: Context) {
 
     private val TAG = "SyncManager"
 

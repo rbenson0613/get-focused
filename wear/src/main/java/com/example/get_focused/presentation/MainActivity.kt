@@ -119,14 +119,21 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         super.onPause()
     }
 
-    override fun onDataChanged(dataEvents: DataEventBuffer) {
-        for (event in dataEvents) {
-            if (event.type == DataEvent.TYPE_CHANGED &&
-                event.dataItem.uri.path == "/sync-events") {
+    // Replace your onDataChanged method in MainActivity with this version:
 
-                val dataMapItem = DataMapItem.fromDataItem(event.dataItem)
-                handleSyncDataMap(dataMapItem.dataMap)
+    override fun onDataChanged(dataEvents: DataEventBuffer) {
+        try {
+            for (event in dataEvents) {
+                if (event.type == DataEvent.TYPE_CHANGED &&
+                    event.dataItem.uri.path == "/sync-events") {
+
+                    val dataMapItem = DataMapItem.fromDataItem(event.dataItem)
+                    handleSyncDataMap(dataMapItem.dataMap)
+                }
             }
+        } finally {
+            // IMPORTANT: Always release the DataEventBuffer to prevent memory leaks
+            dataEvents.release()
         }
     }
 

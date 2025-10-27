@@ -20,7 +20,10 @@ import androidx.wear.compose.material.items
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.serialization.Serializable
 
+
+@Serializable
 data class UiEvent(
     val title: String,
     val startTimeMillis: Long,

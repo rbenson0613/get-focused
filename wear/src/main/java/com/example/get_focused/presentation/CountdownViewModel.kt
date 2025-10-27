@@ -30,6 +30,14 @@ import java.util.TimerTask
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
 
 sealed class AppState {
     object Loading : AppState()
@@ -43,6 +51,8 @@ sealed class AppState {
         val eventTitle: String
     ) : AppState()
 }
+
+private val Context.dataStore by preferencesDataStore(name = "events_cache")
 
 class CountdownViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -63,11 +73,23 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     fun checkSignInStatus() {
         viewModelScope.launch {
             _appState.value = AppState.Loading
+
+            // Try to load cached events first for offline support
+            val cachedEvents = loadCachedEvents()
+            if (cachedEvents != null && cachedEvents.isNotEmpty()) {
+                Log.d("CountdownViewModel", "Using cached events while checking sign-in")
+                updateEventList(cachedEvents)
+            }
+
+            // Then try to fetch fresh data from Google Calendar
             val account = GoogleSignIn.getLastSignedInAccount(getApplication())
             if (account != null && GoogleSignIn.hasPermissions(account, Scope("https://www.googleapis.com/auth/calendar.readonly"))) {
                 fetchCalendarEvents(account)
             } else {
-                _appState.value = AppState.NeedsSignIn
+                // If not signed in and no cached events, show sign-in screen
+                if (cachedEvents == null || cachedEvents.isEmpty()) {
+                    _appState.value = AppState.NeedsSignIn
+                }
             }
         }
     }
@@ -128,6 +150,9 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
 
+                // Save to cache for offline access
+                saveEventsToCache(uiEvents)
+
                 val now = System.currentTimeMillis()
                 val activeEvent = uiEvents.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
 
@@ -137,11 +162,72 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 } else {
                     _appState.value = AppState.ShowEventList(uiEvents)
                 }
-                // It's slightly better to catch a general Exception here to handle network errors too.
             } catch (e: Exception) {
                 Log.e("CountdownViewModel", "Error fetching calendar events", e)
-                _appState.value = AppState.NeedsSignIn
+                // Try to use cached events on error
+                val cachedEvents = loadCachedEvents()
+                if (cachedEvents != null && cachedEvents.isNotEmpty()) {
+                    Log.d("CountdownViewModel", "Using cached events after fetch error")
+                    updateEventList(cachedEvents)
+                } else {
+                    _appState.value = AppState.NeedsSignIn
+                }
             }
+        }
+    }
+
+    /**
+     * Updates the event list with synced events from the mobile app
+     */
+    fun updateEventList(events: List<UiEvent>) {
+        // Save events to local storage
+        viewModelScope.launch {
+            saveEventsToCache(events)
+        }
+
+        val now = System.currentTimeMillis()
+        val activeEvent = events.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
+
+        if (activeEvent != null) {
+            val remainingDuration = activeEvent.endTimeMillis - now
+            startCountdown(remainingDuration, activeEvent.title)
+        } else {
+            _appState.value = AppState.ShowEventList(events)
+        }
+    }
+
+    /**
+     * Save events to DataStore for offline access
+     */
+    private suspend fun saveEventsToCache(events: List<UiEvent>) {
+        val context = getApplication<Application>().applicationContext
+        val eventsJson = Json.encodeToString(events)
+        context.dataStore.edit { preferences ->
+            preferences[stringPreferencesKey("cached_events")] = eventsJson
+        }
+        Log.d("CountdownViewModel", "Saved ${events.size} events to cache")
+    }
+
+    /**
+     * Load cached events from DataStore
+     */
+    private suspend fun loadCachedEvents(): List<UiEvent>? {
+        val context = getApplication<Application>().applicationContext
+        return try {
+            val eventsJson = context.dataStore.data
+                .map { preferences -> preferences[stringPreferencesKey("cached_events")] }
+                .first()
+
+            if (eventsJson != null) {
+                val events = Json.decodeFromString<List<UiEvent>>(eventsJson)
+                Log.d("CountdownViewModel", "Loaded ${events.size} events from cache")
+                events
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("CountdownViewModel", "Failed to load cached events", e)
+            null
         }
     }
 
