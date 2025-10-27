@@ -10,6 +10,8 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.wear.ongoing.OngoingActivity
+import androidx.wear.ongoing.Status
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +22,7 @@ class TimerService : Service() {
     private val binder = TimerBinder()
     private val serviceScope = CoroutineScope(Dispatchers.Default)
     private var countdownJob: Job? = null
+    private var ongoingActivity: OngoingActivity? = null
 
     private val _timerState = MutableStateFlow<TimerState>(TimerState.Idle)
     val timerState = _timerState.asStateFlow()
@@ -72,6 +75,10 @@ class TimerService : Service() {
                 val elapsedTime = totalDuration - remainingTime
                 val progress = elapsedTime.toFloat() / totalDuration
                 _timerState.value = TimerState.Counting(remainingTime, progress, eventTitle)
+                val minutes = TimeUnit.MILLISECONDS.toMinutes(remainingTime)
+                val seconds = TimeUnit.MILLISECONDS.toSeconds(remainingTime) % 60
+                val timeString = String.format("%02d:%02d", minutes, seconds)
+                ongoingActivity?.update(applicationContext, Status.Builder().addTemplate(timeString).build())
                 delay(1000)
                 remainingTime -= 1000
             }
@@ -85,12 +92,27 @@ class TimerService : Service() {
         countdownJob?.cancel()
         _timerState.value = TimerState.Idle
         stopForeground(true)
+        ongoingActivity = null
     }
 
     private fun startForegroundService() {
         createNotificationChannel()
-        val notification = createNotification("Countdown running...")
-        startForeground(NOTIFICATION_ID, notification)
+        val notificationBuilder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("Get Focused")
+            .setContentText("Countdown running...")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setCategory(NotificationCompat.CATEGORY_WORKOUT)
+
+        ongoingActivity = OngoingActivity.Builder(applicationContext, NOTIFICATION_ID, notificationBuilder)
+            .setAnimatedIcon(android.R.drawable.ic_dialog_info)
+            .setTouchIntent(
+                packageManager.getLaunchIntentForPackage(packageName)?.let {
+                    android.app.PendingIntent.getActivity(this, 0, it, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+                }
+            )
+            .build()
+        ongoingActivity?.apply(applicationContext)
+        startForeground(NOTIFICATION_ID, notificationBuilder.build())
     }
 
     private fun createNotificationChannel() {

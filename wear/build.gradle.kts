@@ -74,6 +74,7 @@ dependencies {
     implementation(libs.androidx.localbroadcastmanager)
     implementation(libs.kotlinx.serialization.json)
     implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.wear:wear-ongoing:1.1.0")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
