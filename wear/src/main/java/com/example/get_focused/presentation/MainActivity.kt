@@ -239,7 +239,8 @@ fun WearApp(
                 progress = 1f, // Full circle while waiting
                 time = "Waiting...",
                 currentTime = appState.currentTime,
-                eventTitle = appState.eventTitle
+                eventTitle = appState.eventTitle,
+                onStopClick = onStopClick
             )
         }
         is AppState.ShowCountdown -> {

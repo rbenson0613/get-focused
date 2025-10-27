@@ -317,6 +317,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun stopCountdown() {
+        eventStartTimer?.cancel()
         val intent = Intent(getApplication(), TimerService::class.java).apply {
             action = TimerService.ACTION_STOP
         }
