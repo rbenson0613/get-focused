@@ -1,6 +1,8 @@
 package com.example.get_focused.presentation
 
+import android.app.AlarmManager
 import android.app.Application
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -64,7 +66,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
 
     private var timerService: TimerService? = null
     private var isBound = false
-    private var eventStartTimer: Timer? = null
+    private var eventStartPendingIntent: PendingIntent? = null
     private var clockTimer: Timer? = null
     private val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
     private val _currentTime = MutableStateFlow(timeFormatter.format(Date()))
@@ -256,7 +258,8 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun startCountdownForEvent(event: UiEvent) {
-        eventStartTimer?.cancel()
+        val alarmManager = getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        eventStartPendingIntent?.let { alarmManager.cancel(it) }
 
         val now = System.currentTimeMillis()
         val durationMillis = event.endTimeMillis - event.startTimeMillis
@@ -268,12 +271,17 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
 
         if (now < event.startTimeMillis) {
             _appState.value = AppState.WaitingForEvent(_currentTime.value, event.title)
-            eventStartTimer = Timer()
-            eventStartTimer?.schedule(object : TimerTask() {
-                override fun run() {
-                    startCountdown(durationMillis, event.title)
-                }
-            }, event.startTimeMillis - now)
+            val intent = Intent(getApplication(), EventStartReceiver::class.java).apply {
+                putExtra("eventTitle", event.title)
+                putExtra("duration", durationMillis)
+            }
+            eventStartPendingIntent = PendingIntent.getBroadcast(
+                getApplication(),
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, event.startTimeMillis, eventStartPendingIntent)
         } else {
             val remainingDuration = event.endTimeMillis - now
             if (remainingDuration > 0) {
@@ -317,7 +325,8 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun stopCountdown() {
-        eventStartTimer?.cancel()
+        val alarmManager = getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        eventStartPendingIntent?.let { alarmManager.cancel(it) }
         val intent = Intent(getApplication(), TimerService::class.java).apply {
             action = TimerService.ACTION_STOP
         }
@@ -363,7 +372,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             getApplication<Application>().unbindService(connection)
             isBound = false
         }
-        eventStartTimer?.cancel()
         clockTimer?.cancel()
     }
 }

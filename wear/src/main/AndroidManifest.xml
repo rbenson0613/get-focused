@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
         android:allowBackup="true"
@@ -73,6 +74,7 @@
             android:name="com.example.get_focused.presentation.AuthActivity"
             android:exported="true" />
         <service android:name="com.example.get_focused.presentation.TimerService" android:exported="false" />
+        <receiver android:name="com.example.get_focused.presentation.EventStartReceiver" android:exported="false" />
     </application>
 
 </manifest>
