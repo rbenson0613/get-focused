@@ -102,6 +102,9 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                     },
                     onStopClick = {
                         viewModel.stopCountdown()
+                    },
+                    onTestAlarmClick = {
+                        viewModel.testAlarmNow()
                     }
                 )
             }
@@ -113,7 +116,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         Log.d(TAG, "DataClient listener registered")
         Wearable.getDataClient(this).addListener(this)
 
-        // Also fetch any missed items from when the app wasn’t active
+        // Also fetch any missed items from when the app wasn't active
         checkPendingDataItems()
     }
 
@@ -122,8 +125,6 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         Wearable.getDataClient(this).removeListener(this)
         super.onPause()
     }
-
-    // Replace your onDataChanged method in MainActivity with this version:
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {
         try {
@@ -142,6 +143,8 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     }
 
 
+// Replace handleSyncDataMap in MainActivity with this version:
+
     private fun handleSyncDataMap(dataMap: DataMap) {
         val timestamp = dataMap.getLong("timestamp", 0L)
         val eventCount = dataMap.getInt("event_count", -1)
@@ -159,28 +162,57 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 val uiEvents = syncedEvents.mapNotNull { event ->
                     val endTime = event.endTime
                     if (endTime != null) {
+                        Log.d(TAG, "Event: ${event.title}")
+                        Log.d(TAG, "  Start: ${event.startTime} (${java.util.Date(event.startTime)})")
+                        Log.d(TAG, "  End: $endTime (${java.util.Date(endTime)})")
+
                         UiEvent(
                             title = event.title,
                             startTimeMillis = event.startTime,
                             endTimeMillis = endTime
                         )
                     } else {
+                        Log.w(TAG, "Skipping event ${event.title} - no end time")
                         null
                     }
                 }
 
                 // Process events the same way as fetchCalendarEvents does
                 val now = System.currentTimeMillis()
-                val activeEvent = uiEvents.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
+                Log.d(TAG, "Current time: $now (${java.util.Date(now)})")
+
+                val activeEvent = uiEvents.firstOrNull { event ->
+                    val isActive = now >= event.startTimeMillis && now < event.endTimeMillis
+                    Log.d(TAG, "Checking ${event.title}: isActive=$isActive (start=${event.startTimeMillis}, end=${event.endTimeMillis})")
+                    isActive
+                }
 
                 if (activeEvent != null) {
                     // There's an active event, start countdown
-                    Log.d(TAG, "Found active event: ${activeEvent.title}")
+                    Log.d(TAG, "Found active event: ${activeEvent.title} - starting countdown immediately")
                     viewModel.startCountdownForEvent(activeEvent)
                 } else {
-                    // No active event, show the event list
-                    Log.d(TAG, "No active event, updating event list")
-                    viewModel.updateEventList(uiEvents)
+                    // No active event, find the next upcoming event and schedule it
+                    val upcomingEvents = uiEvents.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
+
+                    if (upcomingEvents.isNotEmpty()) {
+                        val nextEvent = upcomingEvents.first()
+                        val minutesUntil = (nextEvent.startTimeMillis - now) / 1000 / 60
+                        Log.d(TAG, "Next upcoming event: ${nextEvent.title} in $minutesUntil minutes")
+                        Log.d(TAG, "Automatically scheduling alarm for next event")
+
+                        // Automatically schedule the next event
+                        viewModel.startCountdownForEvent(nextEvent)
+                    } else {
+                        Log.d(TAG, "No upcoming events found. Showing event list with ${uiEvents.size} events")
+                        viewModel.updateEventList(uiEvents)
+                    }
+
+                    // Log upcoming events for debugging
+                    upcomingEvents.take(3).forEach { event ->
+                        val minutesUntil = (event.startTimeMillis - now) / 1000 / 60
+                        Log.d(TAG, "Upcoming: ${event.title} in $minutesUntil minutes")
+                    }
                 }
 
             } catch (e: Exception) {
@@ -190,19 +222,20 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             Log.w(TAG, "events_json was null in DataMap")
         }
     }
-
     private fun checkPendingDataItems() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val items = Wearable.getDataClient(this@MainActivity).getDataItems().await()
-                for (item in items) {
-                    if (item.uri.path == "/sync-events") {
-                        val dataMapItem = DataMapItem.fromDataItem(item)
-                        handleSyncDataMap(dataMapItem.dataMap)
-
-                        // optional cleanup
-                        // Wearable.getDataClient(this@MainActivityWear).deleteDataItems(item.uri).await()
+                val dataItemBuffer = Wearable.getDataClient(this@MainActivity).getDataItems().await()
+                try {
+                    for (item in dataItemBuffer) {
+                        if (item.uri.path == "/sync-events") {
+                            val dataMapItem = DataMapItem.fromDataItem(item)
+                            handleSyncDataMap(dataMapItem.dataMap)
+                        }
                     }
+                } finally {
+                    // IMPORTANT: Release the buffer to prevent memory leak
+                    dataItemBuffer.release()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "checkPendingDataItems failed", e)
@@ -220,7 +253,8 @@ fun WearApp(
     appState: AppState,
     onSignInClick: () -> Unit,
     onEventClick: (UiEvent) -> Unit,
-    onStopClick: () -> Unit
+    onStopClick: () -> Unit,
+    onTestAlarmClick: () -> Unit
 ) {
     when (appState) {
         is AppState.Loading -> {
@@ -232,7 +266,11 @@ fun WearApp(
             SignInScreen(onSignInClick = onSignInClick)
         }
         is AppState.ShowEventList -> {
-            EventListScreen(events = appState.events, onEventClick = onEventClick)
+            EventListScreen(
+                events = appState.events,
+                onEventClick = onEventClick,
+                onTestAlarmClick = onTestAlarmClick
+            )
         }
         is AppState.WaitingForEvent -> {
             CountdownScreen(
@@ -327,7 +365,13 @@ fun CountdownScreen(
 @Composable
 fun NeedsSignInPreview() {
     Get_FocusedTheme {
-        WearApp(appState = AppState.NeedsSignIn, onSignInClick = {}, onEventClick = {}, onStopClick = {})
+        WearApp(
+            appState = AppState.NeedsSignIn,
+            onSignInClick = {},
+            onEventClick = {},
+            onStopClick = {},
+            onTestAlarmClick = {}
+        )
     }
 }
 
@@ -344,7 +388,8 @@ fun EventListPreview() {
             ),
             onSignInClick = {},
             onEventClick = {},
-            onStopClick = {}
+            onStopClick = {},
+            onTestAlarmClick = {}
         )
     }
 }
@@ -360,7 +405,8 @@ fun WaitingForEventPreview() {
             ),
             onSignInClick = {},
             onEventClick = {},
-            onStopClick = {}
+            onStopClick = {},
+            onTestAlarmClick = {}
         )
     }
 }
@@ -378,7 +424,8 @@ fun CountdownPreview() {
             ),
             onSignInClick = {},
             onEventClick = {},
-            onStopClick = {}
+            onStopClick = {},
+            onTestAlarmClick = {}
         )
     }
 }

@@ -50,7 +50,11 @@ fun SignInScreen(onSignInClick: () -> Unit) {
 }
 
 @Composable
-fun EventListScreen(events: List<UiEvent>, onEventClick: (UiEvent) -> Unit) {
+fun EventListScreen(
+    events: List<UiEvent>,
+    onEventClick: (UiEvent) -> Unit,
+    onTestAlarmClick: (() -> Unit)? = null
+) {
     if (events.isEmpty()) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -68,6 +72,18 @@ fun EventListScreen(events: List<UiEvent>, onEventClick: (UiEvent) -> Unit) {
                     Text("Upcoming Events")
                 }
             }
+
+            onTestAlarmClick?.let { testClick ->
+                item {
+                    Chip(
+                        onClick = testClick,
+                        label = { Text("🔔 Test Alarm (10s)") },
+                        colors = ChipDefaults.secondaryChipColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
             items(events) { event ->
                 val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
                 val time = timeFormat.format(Date(event.startTimeMillis))

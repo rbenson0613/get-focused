@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="true"
@@ -15,6 +17,18 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault">
+
+        <!-- DataSyncService to receive sync events -->
+        <service
+            android:name="com.example.get_focused.sync.DataSyncService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data android:scheme="wear" android:host="*" />
+            </intent-filter>
+        </service>
+
         <service
             android:name="com.example.get_focused.complication.MainComplicationService"
             android:exported="true"
@@ -31,6 +45,7 @@
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="0" />
         </service>
+
         <service
             android:name="com.example.get_focused.tile.MainTileService"
             android:exported="true"
@@ -51,10 +66,7 @@
         <uses-library
             android:name="wear-sdk"
             android:required="false" />
-        <!--
-               Set to true if your app is Standalone, that is, it does not require the handheld
-               app to run.
-        -->
+
         <meta-data
             android:name="com.google.android.wearable.standalone"
             android:value="false" />
@@ -66,15 +78,27 @@
             android:theme="@style/MainActivityTheme.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
         <activity
             android:name="com.example.get_focused.presentation.AuthActivity"
             android:exported="true" />
-        <service android:name="com.example.get_focused.presentation.TimerService" android:exported="false" />
-        <receiver android:name="com.example.get_focused.presentation.EventStartReceiver" android:exported="false" />
+
+        <service
+            android:name="com.example.get_focused.presentation.TimerService"
+            android:exported="false"
+            android:foregroundServiceType="shortService"/>
+
+        <receiver
+            android:name="com.example.get_focused.presentation.EventStartReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

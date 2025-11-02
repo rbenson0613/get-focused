@@ -104,7 +104,27 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             val cachedEvents = loadCachedEvents()
             if (cachedEvents != null && cachedEvents.isNotEmpty()) {
                 Log.d("CountdownViewModel", "Using cached events while checking sign-in")
-                updateEventList(cachedEvents)
+
+                // Check if there's an active event NOW
+                val now = System.currentTimeMillis()
+                val activeEvent = cachedEvents.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
+
+                if (activeEvent != null) {
+                    // Only start countdown if event is CURRENTLY active
+                    val remainingDuration = activeEvent.endTimeMillis - now
+                    startCountdown(remainingDuration, activeEvent.title)
+                } else {
+                    // Show event list and schedule next event in background
+                    _appState.value = AppState.ShowEventList(cachedEvents)
+
+                    // Schedule the next upcoming event in background
+                    val upcomingEvents = cachedEvents.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
+                    if (upcomingEvents.isNotEmpty()) {
+                        val nextEvent = upcomingEvents.first()
+                        Log.d("CountdownViewModel", "Scheduling next event in background: ${nextEvent.title}")
+                        scheduleEventAlarm(nextEvent)
+                    }
+                }
             }
 
             // Then try to fetch fresh data from Google Calendar
@@ -121,26 +141,14 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     suspend fun getSignInToken(account: GoogleSignInAccount) {
-        // The auth code is now a simple property on the account object.
-        // It can be null if something went wrong or if it wasn't requested.
         val authCode: String? = account.serverAuthCode
 
         if (authCode != null) {
-            // Now you have the auth code. You would typically send this
-            // to your backend server, which then exchanges it for tokens.
-            // For your client-side-only app, you might not need this flow
-            // and can continue using GoogleAccountCredential as before.
             Log.d("Auth", "Server Auth Code: $authCode")
-
-            // If your goal is just to make client-side calls, you still
-            // use GoogleAccountCredential, which handles token management internally.
-            // The requestServerSideAccess flow is primarily for backend integration.
         } else {
             Log.e("Auth", "Server Auth Code was null. Did you request it in GoogleSignInOptions?")
         }
     }
-
-    // In CountdownViewModel.kt
 
     private fun fetchCalendarEvents(account: GoogleSignInAccount) {
         viewModelScope.launch {
@@ -183,10 +191,20 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 val activeEvent = uiEvents.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
 
                 if (activeEvent != null) {
+                    // Event is active NOW, start countdown immediately
                     val remainingDuration = activeEvent.endTimeMillis - now
                     startCountdown(remainingDuration, activeEvent.title)
                 } else {
+                    // Show event list
                     _appState.value = AppState.ShowEventList(uiEvents)
+
+                    // Schedule next upcoming event in background
+                    val upcomingEvents = uiEvents.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
+                    if (upcomingEvents.isNotEmpty()) {
+                        val nextEvent = upcomingEvents.first()
+                        Log.d("CountdownViewModel", "Scheduling next event from calendar: ${nextEvent.title}")
+                        scheduleEventAlarm(nextEvent)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("CountdownViewModel", "Error fetching calendar events", e)
@@ -202,9 +220,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /**
-     * Updates the event list with synced events from the mobile app
-     */
     fun updateEventList(events: List<UiEvent>) {
         // Save events to local storage
         viewModelScope.launch {
@@ -218,13 +233,19 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             val remainingDuration = activeEvent.endTimeMillis - now
             startCountdown(remainingDuration, activeEvent.title)
         } else {
-            _appState.value = AppState.ShowEventList(events)
+            // Find the next upcoming event and schedule it automatically
+            val upcomingEvents = events.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
+
+            if (upcomingEvents.isNotEmpty()) {
+                val nextEvent = upcomingEvents.first()
+                Log.d("CountdownViewModel", "Auto-scheduling next event: ${nextEvent.title}")
+                startCountdownForEvent(nextEvent)
+            } else {
+                _appState.value = AppState.ShowEventList(events)
+            }
         }
     }
 
-    /**
-     * Save events to DataStore for offline access
-     */
     private suspend fun saveEventsToCache(events: List<UiEvent>) {
         val context = getApplication<Application>().applicationContext
         val eventsJson = Json.encodeToString(events)
@@ -234,9 +255,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         Log.d("CountdownViewModel", "Saved ${events.size} events to cache")
     }
 
-    /**
-     * Load cached events from DataStore
-     */
     private suspend fun loadCachedEvents(): List<UiEvent>? {
         val context = getApplication<Application>().applicationContext
         return try {
@@ -257,20 +275,88 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun startCountdownForEvent(event: UiEvent) {
+    private fun scheduleEventAlarm(event: UiEvent) {
         val alarmManager = getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        eventStartPendingIntent?.let { alarmManager.cancel(it) }
+        eventStartPendingIntent?.let {
+            alarmManager.cancel(it)
+            Log.d("CountdownViewModel", "Cancelled previous alarm")
+        }
 
         val now = System.currentTimeMillis()
         val durationMillis = event.endTimeMillis - event.startTimeMillis
 
+        Log.d("CountdownViewModel", "scheduleEventAlarm: ${event.title}")
+        Log.d("CountdownViewModel", "Event start time: ${event.startTimeMillis}, now: $now")
+
+        if (durationMillis <= 0 || now >= event.startTimeMillis) {
+            Log.w("CountdownViewModel", "Event already started or invalid duration")
+            return
+        }
+
+        val waitTime = event.startTimeMillis - now
+        Log.d("CountdownViewModel", "Scheduling alarm for ${waitTime}ms from now")
+
+        val intent = Intent(getApplication(), EventStartReceiver::class.java).apply {
+            putExtra("eventTitle", event.title)
+            putExtra("duration", durationMillis)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            getApplication(),
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        eventStartPendingIntent = pendingIntent
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    event.startTimeMillis,
+                    pendingIntent
+                )
+                Log.d("CountdownViewModel", "Alarm scheduled for ${event.startTimeMillis}")
+            } else {
+                Log.e("CountdownViewModel", "Cannot schedule exact alarms")
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    event.startTimeMillis,
+                    pendingIntent
+                )
+            }
+        } else {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, event.startTimeMillis, pendingIntent)
+            Log.d("CountdownViewModel", "Alarm scheduled for ${event.startTimeMillis}")
+        }
+    }
+
+    fun startCountdownForEvent(event: UiEvent) {
+        val alarmManager = getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        eventStartPendingIntent?.let {
+            alarmManager.cancel(it)
+            Log.d("CountdownViewModel", "Cancelled previous alarm")
+        }
+
+        val now = System.currentTimeMillis()
+        val durationMillis = event.endTimeMillis - event.startTimeMillis
+
+        Log.d("CountdownViewModel", "startCountdownForEvent: ${event.title}")
+        Log.d("CountdownViewModel", "Event start time: ${event.startTimeMillis}, now: $now")
+        Log.d("CountdownViewModel", "Duration: $durationMillis ms")
+
         if (durationMillis <= 0) {
+            Log.w("CountdownViewModel", "Duration is negative or zero, refreshing events")
             checkSignInStatus()
             return
         }
 
         if (now < event.startTimeMillis) {
+            // Event hasn't started yet, schedule alarm
+            val waitTime = event.startTimeMillis - now
+            Log.d("CountdownViewModel", "Event starts in ${waitTime}ms, scheduling alarm")
+
             _appState.value = AppState.WaitingForEvent(_currentTime.value, event.title)
+
             val intent = Intent(getApplication(), EventStartReceiver::class.java).apply {
                 putExtra("eventTitle", event.title)
                 putExtra("duration", durationMillis)
@@ -282,14 +368,70 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             eventStartPendingIntent = pendingIntent
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, event.startTimeMillis, pendingIntent)
+
+            // Check if we can schedule exact alarms
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        event.startTimeMillis,
+                        pendingIntent
+                    )
+                    Log.d("CountdownViewModel", "Scheduled exact alarm for ${event.startTimeMillis}")
+                } else {
+                    Log.e("CountdownViewModel", "Cannot schedule exact alarms - permission not granted")
+                    // Fallback to inexact alarm
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        event.startTimeMillis,
+                        pendingIntent
+                    )
+                }
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, event.startTimeMillis, pendingIntent)
+                Log.d("CountdownViewModel", "Scheduled exact alarm for ${event.startTimeMillis}")
+            }
         } else {
+            // Event is happening now
             val remainingDuration = event.endTimeMillis - now
+            Log.d("CountdownViewModel", "Event is active now, remaining: ${remainingDuration}ms")
+
             if (remainingDuration > 0) {
                 startCountdown(remainingDuration, event.title)
             } else {
+                Log.w("CountdownViewModel", "Event already finished")
                 checkSignInStatus()
             }
+        }
+    }
+
+    fun testAlarmNow() {
+        Log.d("CountdownViewModel", "Testing alarm in 10 seconds...")
+        val alarmManager = getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+        val intent = Intent(getApplication(), EventStartReceiver::class.java).apply {
+            putExtra("eventTitle", "Test Event")
+            putExtra("duration", 60000L)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            getApplication(),
+            999,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val triggerTime = System.currentTimeMillis() + 10000 // 10 seconds from now
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+                Log.d("CountdownViewModel", "Test alarm scheduled for 10 seconds from now")
+            } else {
+                Log.e("CountdownViewModel", "CANNOT SCHEDULE EXACT ALARMS - Missing permission!")
+            }
+        } else {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+            Log.d("CountdownViewModel", "Test alarm scheduled (pre-Android S)")
         }
     }
 
@@ -332,13 +474,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             action = TimerService.ACTION_STOP
         }
         getApplication<Application>().startService(intent)
-    }
-
-    private fun getClientId(): String {
-        // IMPORTANT: Replace this with your own Web application client ID from the Google Cloud Console.
-        // This is required to get an access token to call the Google Calendar API.
-        // It should look like: "YOUR_CLIENT_ID.apps.googleusercontent.com"
-        return "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
     }
 
     private fun triggerNotification() {
