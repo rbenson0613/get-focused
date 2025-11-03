@@ -143,8 +143,6 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     }
 
 
-// Replace handleSyncDataMap in MainActivity with this version:
-
     private fun handleSyncDataMap(dataMap: DataMap) {
         val timestamp = dataMap.getLong("timestamp", 0L)
         val eventCount = dataMap.getInt("event_count", -1)
@@ -188,27 +186,16 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 }
 
                 if (activeEvent != null) {
-                    // There's an active event, start countdown
+                    // There's an active event, start countdown immediately
                     Log.d(TAG, "Found active event: ${activeEvent.title} - starting countdown immediately")
                     viewModel.startCountdownForEvent(activeEvent)
                 } else {
-                    // No active event, find the next upcoming event and schedule it
-                    val upcomingEvents = uiEvents.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
-
-                    if (upcomingEvents.isNotEmpty()) {
-                        val nextEvent = upcomingEvents.first()
-                        val minutesUntil = (nextEvent.startTimeMillis - now) / 1000 / 60
-                        Log.d(TAG, "Next upcoming event: ${nextEvent.title} in $minutesUntil minutes")
-                        Log.d(TAG, "Automatically scheduling alarm for next event")
-
-                        // Automatically schedule the next event
-                        viewModel.startCountdownForEvent(nextEvent)
-                    } else {
-                        Log.d(TAG, "No upcoming events found. Showing event list with ${uiEvents.size} events")
-                        viewModel.updateEventList(uiEvents)
-                    }
+                    // No active event - update event list (will show list and schedule alarm)
+                    Log.d(TAG, "No active event found. Updating event list with ${uiEvents.size} events")
+                    viewModel.updateEventList(uiEvents)
 
                     // Log upcoming events for debugging
+                    val upcomingEvents = uiEvents.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
                     upcomingEvents.take(3).forEach { event ->
                         val minutesUntil = (event.startTimeMillis - now) / 1000 / 60
                         Log.d(TAG, "Upcoming: ${event.title} in $minutesUntil minutes")
@@ -222,6 +209,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             Log.w(TAG, "events_json was null in DataMap")
         }
     }
+
     private fun checkPendingDataItems() {
         CoroutineScope(Dispatchers.IO).launch {
             try {

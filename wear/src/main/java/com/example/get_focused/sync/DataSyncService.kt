@@ -18,8 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
-
-private val Context.dataStore by preferencesDataStore(name = "events_cache")
+import com.example.get_focused.data.eventsDataStore
 
 class DataSyncService : WearableListenerService() {
 
@@ -60,7 +59,7 @@ class DataSyncService : WearableListenerService() {
 
                                 // Save to cache
                                 val uiEventsJson = Json.encodeToString(uiEvents)
-                                applicationContext.dataStore.edit { preferences ->
+                                applicationContext.eventsDataStore.edit { preferences ->
                                     preferences[stringPreferencesKey("cached_events")] = uiEventsJson
                                 }
                                 Log.d(TAG, "Cached ${uiEvents.size} events")

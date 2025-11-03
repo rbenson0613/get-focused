@@ -20,7 +20,6 @@ import com.example.get_focused.presentation.ui.UiEvent
 import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.google.api.services.calendar.CalendarScopes
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +28,6 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
 import java.util.Timer
 import java.util.TimerTask
 import java.util.concurrent.TimeUnit
@@ -42,6 +40,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import com.example.get_focused.data.eventsDataStore
 
 
 sealed class AppState {
@@ -56,8 +55,6 @@ sealed class AppState {
         val eventTitle: String
     ) : AppState()
 }
-
-private val Context.dataStore by preferencesDataStore(name = "events_cache")
 
 class CountdownViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -230,18 +227,19 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         val activeEvent = events.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
 
         if (activeEvent != null) {
+            // Event is active NOW
             val remainingDuration = activeEvent.endTimeMillis - now
             startCountdown(remainingDuration, activeEvent.title)
         } else {
-            // Find the next upcoming event and schedule it automatically
-            val upcomingEvents = events.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
+            // Show event list
+            _appState.value = AppState.ShowEventList(events)
 
+            // Schedule next upcoming event in background
+            val upcomingEvents = events.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
             if (upcomingEvents.isNotEmpty()) {
                 val nextEvent = upcomingEvents.first()
-                Log.d("CountdownViewModel", "Auto-scheduling next event: ${nextEvent.title}")
-                startCountdownForEvent(nextEvent)
-            } else {
-                _appState.value = AppState.ShowEventList(events)
+                Log.d("CountdownViewModel", "Scheduling next event: ${nextEvent.title}")
+                scheduleEventAlarm(nextEvent)
             }
         }
     }
@@ -249,7 +247,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     private suspend fun saveEventsToCache(events: List<UiEvent>) {
         val context = getApplication<Application>().applicationContext
         val eventsJson = Json.encodeToString(events)
-        context.dataStore.edit { preferences ->
+        context.eventsDataStore.edit { preferences ->
             preferences[stringPreferencesKey("cached_events")] = eventsJson
         }
         Log.d("CountdownViewModel", "Saved ${events.size} events to cache")
@@ -258,7 +256,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     private suspend fun loadCachedEvents(): List<UiEvent>? {
         val context = getApplication<Application>().applicationContext
         return try {
-            val eventsJson = context.dataStore.data
+            val eventsJson = context.eventsDataStore.data
                 .map { preferences -> preferences[stringPreferencesKey("cached_events")] }
                 .first()
 
@@ -275,7 +273,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private fun scheduleEventAlarm(event: UiEvent) {
+    fun scheduleEventAlarm(event: UiEvent) {
         val alarmManager = getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
         eventStartPendingIntent?.let {
             alarmManager.cancel(it)
@@ -284,17 +282,99 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
 
         val now = System.currentTimeMillis()
         val durationMillis = event.endTimeMillis - event.startTimeMillis
+        val gracePeriodMillis = 2 * 60 * 1000 // 2 minutes
+
+        if (durationMillis <= 0) {
+            Log.w("CountdownViewModel", "Invalid event duration for ${event.title}")
+            return
+        }
 
         Log.d("CountdownViewModel", "scheduleEventAlarm: ${event.title}")
         Log.d("CountdownViewModel", "Event start time: ${event.startTimeMillis}, now: $now")
 
-        if (durationMillis <= 0 || now >= event.startTimeMillis) {
-            Log.w("CountdownViewModel", "Event already started or invalid duration")
+        // If the event already started (within 2 min grace window), start countdown immediately
+        if (now >= event.startTimeMillis - gracePeriodMillis && now < event.endTimeMillis) {
+            Log.d("CountdownViewModel", "Event already started recently — starting countdown immediately")
+            val remaining = event.endTimeMillis - now
+            startCountdown(remaining, event.title)
             return
         }
 
-        val waitTime = event.startTimeMillis - now
-        Log.d("CountdownViewModel", "Scheduling alarm for ${waitTime}ms from now")
+        // Skip events that have already finished
+        if (now >= event.endTimeMillis) {
+            Log.w("CountdownViewModel", "Event ${event.title} already finished")
+            return
+        }
+
+        // Otherwise, schedule alarm for future start
+        val intent = Intent(getApplication(), EventStartReceiver::class.java).apply {
+            putExtra("eventTitle", event.title)
+            putExtra("duration", durationMillis)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            getApplication(),
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        eventStartPendingIntent = pendingIntent
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    event.startTimeMillis,
+                    pendingIntent
+                )
+                Log.d("CountdownViewModel", "Exact alarm scheduled for ${event.startTimeMillis}")
+            } else {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    event.startTimeMillis,
+                    pendingIntent
+                )
+                Log.e("CountdownViewModel", "Cannot schedule exact alarms — using inexact fallback")
+            }
+        } else {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, event.startTimeMillis, pendingIntent)
+            Log.d("CountdownViewModel", "Exact alarm scheduled (pre-S)")
+        }
+    }
+
+    fun startCountdownForEvent(event: UiEvent) {
+        val alarmManager = getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        eventStartPendingIntent?.let {
+            alarmManager.cancel(it)
+            Log.d("CountdownViewModel", "Cancelled previous alarm")
+        }
+
+        val now = System.currentTimeMillis()
+        val durationMillis = event.endTimeMillis - event.startTimeMillis
+        val gracePeriodMillis = 2 * 60 * 1000 // 2 minutes
+
+        if (durationMillis <= 0) {
+            Log.w("CountdownViewModel", "Invalid duration for event ${event.title}")
+            checkSignInStatus()
+            return
+        }
+
+        // If event started recently (within grace window), start countdown immediately
+        if (now >= event.startTimeMillis - gracePeriodMillis && now < event.endTimeMillis) {
+            Log.d("CountdownViewModel", "Event ${event.title} started recently, launching countdown immediately")
+            val remaining = event.endTimeMillis - now
+            startCountdown(remaining, event.title)
+            return
+        }
+
+        // If event already finished, skip
+        if (now >= event.endTimeMillis) {
+            Log.w("CountdownViewModel", "Event ${event.title} already finished")
+            checkSignInStatus()
+            return
+        }
+
+        // Otherwise, schedule alarm for the upcoming event
+        _appState.value = AppState.WaitingForEvent(_currentTime.value, event.title)
 
         val intent = Intent(getApplication(), EventStartReceiver::class.java).apply {
             putExtra("eventTitle", event.title)
@@ -315,93 +395,18 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                     event.startTimeMillis,
                     pendingIntent
                 )
-                Log.d("CountdownViewModel", "Alarm scheduled for ${event.startTimeMillis}")
+                Log.d("CountdownViewModel", "Exact alarm scheduled for ${event.startTimeMillis}")
             } else {
-                Log.e("CountdownViewModel", "Cannot schedule exact alarms")
                 alarmManager.setAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     event.startTimeMillis,
                     pendingIntent
                 )
+                Log.e("CountdownViewModel", "Cannot schedule exact alarms — using inexact fallback")
             }
         } else {
             alarmManager.setExact(AlarmManager.RTC_WAKEUP, event.startTimeMillis, pendingIntent)
-            Log.d("CountdownViewModel", "Alarm scheduled for ${event.startTimeMillis}")
-        }
-    }
-
-    fun startCountdownForEvent(event: UiEvent) {
-        val alarmManager = getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        eventStartPendingIntent?.let {
-            alarmManager.cancel(it)
-            Log.d("CountdownViewModel", "Cancelled previous alarm")
-        }
-
-        val now = System.currentTimeMillis()
-        val durationMillis = event.endTimeMillis - event.startTimeMillis
-
-        Log.d("CountdownViewModel", "startCountdownForEvent: ${event.title}")
-        Log.d("CountdownViewModel", "Event start time: ${event.startTimeMillis}, now: $now")
-        Log.d("CountdownViewModel", "Duration: $durationMillis ms")
-
-        if (durationMillis <= 0) {
-            Log.w("CountdownViewModel", "Duration is negative or zero, refreshing events")
-            checkSignInStatus()
-            return
-        }
-
-        if (now < event.startTimeMillis) {
-            // Event hasn't started yet, schedule alarm
-            val waitTime = event.startTimeMillis - now
-            Log.d("CountdownViewModel", "Event starts in ${waitTime}ms, scheduling alarm")
-
-            _appState.value = AppState.WaitingForEvent(_currentTime.value, event.title)
-
-            val intent = Intent(getApplication(), EventStartReceiver::class.java).apply {
-                putExtra("eventTitle", event.title)
-                putExtra("duration", durationMillis)
-            }
-            val pendingIntent = PendingIntent.getBroadcast(
-                getApplication(),
-                0,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            eventStartPendingIntent = pendingIntent
-
-            // Check if we can schedule exact alarms
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        event.startTimeMillis,
-                        pendingIntent
-                    )
-                    Log.d("CountdownViewModel", "Scheduled exact alarm for ${event.startTimeMillis}")
-                } else {
-                    Log.e("CountdownViewModel", "Cannot schedule exact alarms - permission not granted")
-                    // Fallback to inexact alarm
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        event.startTimeMillis,
-                        pendingIntent
-                    )
-                }
-            } else {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, event.startTimeMillis, pendingIntent)
-                Log.d("CountdownViewModel", "Scheduled exact alarm for ${event.startTimeMillis}")
-            }
-        } else {
-            // Event is happening now
-            val remainingDuration = event.endTimeMillis - now
-            Log.d("CountdownViewModel", "Event is active now, remaining: ${remainingDuration}ms")
-
-            if (remainingDuration > 0) {
-                startCountdown(remainingDuration, event.title)
-            } else {
-                Log.w("CountdownViewModel", "Event already finished")
-                checkSignInStatus()
-            }
+            Log.d("CountdownViewModel", "Exact alarm scheduled (pre-S)")
         }
     }
 
