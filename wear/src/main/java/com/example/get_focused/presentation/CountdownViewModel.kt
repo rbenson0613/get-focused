@@ -282,7 +282,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
 
         val now = System.currentTimeMillis()
         val durationMillis = event.endTimeMillis - event.startTimeMillis
-        val gracePeriodMillis = 2 * 60 * 1000 // 2 minutes
 
         if (durationMillis <= 0) {
             Log.w("CountdownViewModel", "Invalid event duration for ${event.title}")
@@ -292,9 +291,9 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         Log.d("CountdownViewModel", "scheduleEventAlarm: ${event.title}")
         Log.d("CountdownViewModel", "Event start time: ${event.startTimeMillis}, now: $now")
 
-        // If the event already started (within 2 min grace window), start countdown immediately
-        if (now >= event.startTimeMillis - gracePeriodMillis && now < event.endTimeMillis) {
-            Log.d("CountdownViewModel", "Event already started recently — starting countdown immediately")
+        // If the event already started, start countdown immediately
+        if (now >= event.startTimeMillis && now < event.endTimeMillis) {
+            Log.d("CountdownViewModel", "Event has already started — starting countdown immediately")
             val remaining = event.endTimeMillis - now
             startCountdown(remaining, event.title)
             return
@@ -350,7 +349,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
 
         val now = System.currentTimeMillis()
         val durationMillis = event.endTimeMillis - event.startTimeMillis
-        val gracePeriodMillis = 2 * 60 * 1000 // 2 minutes
 
         if (durationMillis <= 0) {
             Log.w("CountdownViewModel", "Invalid duration for event ${event.title}")
@@ -358,9 +356,9 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
 
-        // If event started recently (within grace window), start countdown immediately
-        if (now >= event.startTimeMillis - gracePeriodMillis && now < event.endTimeMillis) {
-            Log.d("CountdownViewModel", "Event ${event.title} started recently, launching countdown immediately")
+        // If event has started, start countdown immediately
+        if (now >= event.startTimeMillis && now < event.endTimeMillis) {
+            Log.d("CountdownViewModel", "Event ${event.title} has started, launching countdown immediately")
             val remaining = event.endTimeMillis - now
             startCountdown(remaining, event.title)
             return
