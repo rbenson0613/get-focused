@@ -25,12 +25,21 @@ class EventStartReceiver : BroadcastReceiver() {
 
         Log.d(TAG, "onReceive: Event '$eventTitle' triggered, duration=$duration")
 
-        // 1️⃣ Start the timer service in the background
+        // 1️⃣ Start the timer service
+        startTimerService(context, eventTitle, duration)
+
+        // 2️⃣ Wake the screen and show full-screen notification
+        wakeScreenAndNotify(context, eventTitle, duration)
+    }
+
+    private fun startTimerService(context: Context, eventTitle: String, duration: Long) {
         val serviceIntent = Intent(context, TimerService::class.java).apply {
             action = TimerService.ACTION_START
             putExtra(TimerService.EXTRA_EVENT_TITLE, eventTitle)
             putExtra(TimerService.EXTRA_DURATION_MS, duration)
+            putExtra(TimerService.EXTRA_SHOW_NOTIFICATION, false) // Don't show timer notification
         }
+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(serviceIntent)
@@ -41,73 +50,90 @@ class EventStartReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start TimerService", e)
         }
+    }
 
-        // 2️⃣ Briefly wake the screen so the user can see the notification
+    private fun wakeScreenAndNotify(context: Context, eventTitle: String, duration: Long) {
+        // Wake the screen with full wake lock
         try {
             val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
             val wakeLock = pm.newWakeLock(
-                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                PowerManager.FULL_WAKE_LOCK or
+                        PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                        PowerManager.ON_AFTER_RELEASE,
                 "GetFocused:EventWake"
             )
-            wakeLock.acquire(2000)
+            wakeLock.acquire(5000) // Hold for 5 seconds
+            Log.d(TAG, "Screen wake lock acquired")
+
+            // Show the full-screen notification
+            showFullScreenNotification(context, eventTitle, duration)
+
             wakeLock.release()
         } catch (e: Exception) {
-            Log.w(TAG, "Unable to acquire wake lock", e)
+            Log.e(TAG, "Failed to acquire wake lock or show notification", e)
         }
-
-        // 3️⃣ Create the notification (full-screen or fallback)
-        showEventNotification(context, eventTitle, duration)
     }
 
-    private fun showEventNotification(context: Context, eventTitle: String, duration: Long) {
+    private fun showFullScreenNotification(context: Context, eventTitle: String, duration: Long) {
         createNotificationChannel(context)
 
         val launchIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_NO_USER_ACTION or
+                    Intent.FLAG_FROM_BACKGROUND
             putExtra("auto_start_event", true)
             putExtra("eventTitle", eventTitle)
             putExtra("duration", duration)
         }
 
-        val pendingIntent = PendingIntent.getActivity(
+        val fullScreenPendingIntent = PendingIntent.getActivity(
             context,
             0,
             launchIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                    PendingIntent.FLAG_IMMUTABLE or
+                    PendingIntent.FLAG_CANCEL_CURRENT
         )
 
-        val nm = context.getSystemService(NotificationManager::class.java)
-        val canUseFullScreen =
-            if (Build.VERSION.SDK_INT >= 34) {  // Android 14 (API 34)
-                nm.canUseFullScreenIntent()
-            } else {
-                true
-            }
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        Log.d(TAG, "canUseFullScreenIntent = $canUseFullScreen")
+        // Check if we can use full-screen intents
+        val canUseFullScreen = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            nm.canUseFullScreenIntent()
+        } else {
+            true
+        }
+
+        Log.d(TAG, "Can use full-screen intent: $canUseFullScreen")
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Event starting now")
+            .setContentTitle("🎯 Event Starting Now!")
             .setContentText(eventTitle)
+            .setStyle(NotificationCompat.BigTextStyle()
+                .bigText("$eventTitle is starting now. Tap to begin timer."))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setOngoing(false)
-            .setContentIntent(pendingIntent)
+            .setVibrate(longArrayOf(0, 500, 250, 500, 250, 500))
+            .setContentIntent(fullScreenPendingIntent)
 
+        // Set full-screen intent - this is what makes it pop up
         if (canUseFullScreen) {
-            // Request a full-screen UI when allowed
-            builder.setFullScreenIntent(pendingIntent, true)
-            Log.d(TAG, "Using full-screen intent for event '$eventTitle'")
+            builder.setFullScreenIntent(fullScreenPendingIntent, true)
+            Log.d(TAG, "Full-screen intent set")
         } else {
-            Log.w(TAG, "Full-screen intent not allowed; using regular high-priority notification")
+            Log.w(TAG, "Full-screen intent not allowed - using high-priority notification")
         }
 
         val notification = builder.build()
         nm.notify(NOTIFICATION_ID, notification)
+
+        Log.d(TAG, "Full-screen notification posted for '$eventTitle'")
     }
 
     private fun createNotificationChannel(context: Context) {
@@ -117,11 +143,16 @@ class EventStartReceiver : BroadcastReceiver() {
                 "Event Start Alerts",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifications shown when an event starts"
+                description = "Full-screen alerts when events start"
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 250, 500, 250, 500)
                 setShowBadge(false)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
-            val nm = context.getSystemService(NotificationManager::class.java)
+
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.createNotificationChannel(channel)
+            Log.d(TAG, "Notification channel created")
         }
     }
 }

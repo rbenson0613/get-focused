@@ -1,5 +1,6 @@
 package com.example.get_focused.presentation
 
+import android.app.NotificationManager
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -82,6 +83,9 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         installSplashScreen()
         super.onCreate(savedInstanceState)
 
+        // Check for full-screen intent permission
+        checkFullScreenIntentPermission()
+
         LocalBroadcastManager.getInstance(this)
             .registerReceiver(syncReceiver, IntentFilter(DataSyncService.ACTION_SYNC_EVENTS))
 
@@ -112,6 +116,34 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         handleAutoStartIntent(intent)
     }
 
+    private fun checkFullScreenIntentPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34+
+            val nm = getSystemService(NotificationManager::class.java)
+            if (!nm.canUseFullScreenIntent()) {
+                Log.w(TAG, "Full-screen intent permission not granted")
+                // You could show a dialog here explaining why you need this permission
+                // For now, we'll just log it. The user can grant it in Settings.
+                // Uncomment below to automatically open settings:
+                // requestFullScreenIntentPermission()
+            } else {
+                Log.d(TAG, "Full-screen intent permission granted")
+            }
+        } else {
+            Log.d(TAG, "Full-screen intent available (API < 34)")
+        }
+    }
+
+    private fun requestFullScreenIntentPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                startActivity(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to open full-screen intent settings", e)
+            }
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         Log.d(TAG, "onNewIntent called with extras: ${intent.extras?.keySet()?.joinToString()}")
@@ -124,25 +156,8 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         Log.d(TAG, "handleAutoStartIntent: isAutoStart=$isAutoStart")
 
         if (isAutoStart) {
-            Log.d(TAG, "Auto-start event detected - timer should be running")
+            Log.d(TAG, "Auto-start event detected - forcing timer state check")
             viewModel.forceCheckTimerState()
-        }
-    }
-
-    // In MainActivity.kt
-    private fun requestExactAlarmPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // This Intent takes the user to the system settings page
-            startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
-        }
-    }
-
-    // In MainActivity.kt
-    private fun requestFullScreenIntentPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34+
-            // This Intent takes the user to a DIFFERENT system settings page
-            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
-            startActivity(intent)
         }
     }
 
@@ -160,6 +175,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     }
 
     override fun onPause() {
+        Log.d(TAG, "onPause called")
         Log.d(TAG, "DataClient listener unregistered")
         Wearable.getDataClient(this).removeListener(this)
         super.onPause()
@@ -246,6 +262,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        Log.d(TAG, "onDestroy called")
     }
 }
 
