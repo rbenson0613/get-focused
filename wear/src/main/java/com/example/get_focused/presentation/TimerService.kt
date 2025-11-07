@@ -168,13 +168,16 @@ class TimerService : Service() {
             openPending
         ).build()
 
+        // --- THIS IS THE FIX ---
         val minutes = TimeUnit.MILLISECONDS.toMinutes(durationMs)
-        // ... (rest of your time formatting) ...
+        val seconds = TimeUnit.MILLISECONDS.toSeconds(durationMs) % 60
+        val timeLeft = String.format("%02d:%02d", minutes, seconds)
+        // -----------------------
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("Event Timer")
-            .setContentText("$eventTitle • $timeLeft remaining")
+            .setContentText("$eventTitle • $timeLeft remaining") // <-- This line will now work
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openPending) // Keep this for the tap-to-open behavior
