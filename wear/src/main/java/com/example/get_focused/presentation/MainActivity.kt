@@ -15,15 +15,11 @@ import kotlinx.serialization.decodeFromString
 
 import android.content.Intent
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.google.android.gms.wearable.MessageClient
-import com.google.android.gms.wearable.MessageEvent
-import com.google.android.gms.wearable.Wearable
 
 import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
-import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
@@ -109,12 +105,36 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 )
             }
         }
+
+        // Check if launched by alarm
+        handleAutoStartIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        Log.d(TAG, "onNewIntent called with extras: ${intent.extras?.keySet()?.joinToString()}")
+        setIntent(intent)
+        handleAutoStartIntent(intent)
+    }
+
+    private fun handleAutoStartIntent(intent: Intent?) {
+        val isAutoStart = intent?.getBooleanExtra("auto_start_event", false) ?: false
+        Log.d(TAG, "handleAutoStartIntent: isAutoStart=$isAutoStart")
+
+        if (isAutoStart) {
+            Log.d(TAG, "Auto-start event detected - timer should be running")
+            viewModel.forceCheckTimerState()
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        Log.d(TAG, "onResume called")
         Log.d(TAG, "DataClient listener registered")
         Wearable.getDataClient(this).addListener(this)
+
+        // Check if we have auto-start intent when resuming
+        handleAutoStartIntent(intent)
 
         // Also fetch any missed items from when the app wasn't active
         checkPendingDataItems()
@@ -137,11 +157,9 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 }
             }
         } finally {
-            // IMPORTANT: Always release the DataEventBuffer to prevent memory leaks
             dataEvents.release()
         }
     }
-
 
     private fun handleSyncDataMap(dataMap: DataMap) {
         val timestamp = dataMap.getLong("timestamp", 0L)
@@ -152,61 +170,38 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
         if (eventsJson != null) {
             try {
-                // Deserialize the events
                 val syncedEvents = Json.decodeFromString<List<SyncedEvent>>(eventsJson)
                 Log.d(TAG, "Successfully parsed ${syncedEvents.size} events")
 
-                // Convert to UiEvents and process them
                 val uiEvents = syncedEvents.mapNotNull { event ->
                     val endTime = event.endTime
                     if (endTime != null) {
-                        Log.d(TAG, "Event: ${event.title}")
-                        Log.d(TAG, "  Start: ${event.startTime} (${java.util.Date(event.startTime)})")
-                        Log.d(TAG, "  End: $endTime (${java.util.Date(endTime)})")
-
                         UiEvent(
                             title = event.title,
                             startTimeMillis = event.startTime,
                             endTimeMillis = endTime
                         )
                     } else {
-                        Log.w(TAG, "Skipping event ${event.title} - no end time")
                         null
                     }
                 }
 
-                // Process events the same way as fetchCalendarEvents does
                 val now = System.currentTimeMillis()
-                Log.d(TAG, "Current time: $now (${java.util.Date(now)})")
-
                 val activeEvent = uiEvents.firstOrNull { event ->
-                    val isActive = now >= event.startTimeMillis && now < event.endTimeMillis
-                    Log.d(TAG, "Checking ${event.title}: isActive=$isActive (start=${event.startTimeMillis}, end=${event.endTimeMillis})")
-                    isActive
+                    now >= event.startTimeMillis && now < event.endTimeMillis
                 }
 
                 if (activeEvent != null) {
-                    // There's an active event, start countdown immediately
-                    Log.d(TAG, "Found active event: ${activeEvent.title} - starting countdown immediately")
+                    Log.d(TAG, "Found active event: ${activeEvent.title}")
                     viewModel.startCountdownForEvent(activeEvent)
                 } else {
-                    // No active event - update event list (will show list and schedule alarm)
-                    Log.d(TAG, "No active event found. Updating event list with ${uiEvents.size} events")
+                    Log.d(TAG, "No active event found. Updating event list")
                     viewModel.updateEventList(uiEvents)
-
-                    // Log upcoming events for debugging
-                    val upcomingEvents = uiEvents.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
-                    upcomingEvents.take(3).forEach { event ->
-                        val minutesUntil = (event.startTimeMillis - now) / 1000 / 60
-                        Log.d(TAG, "Upcoming: ${event.title} in $minutesUntil minutes")
-                    }
                 }
 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse events JSON", e)
             }
-        } else {
-            Log.w(TAG, "events_json was null in DataMap")
         }
     }
 
@@ -222,7 +217,6 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                         }
                     }
                 } finally {
-                    // IMPORTANT: Release the buffer to prevent memory leak
                     dataItemBuffer.release()
                 }
             } catch (e: Exception) {
@@ -262,7 +256,7 @@ fun WearApp(
         }
         is AppState.WaitingForEvent -> {
             CountdownScreen(
-                progress = 1f, // Full circle while waiting
+                progress = 1f,
                 time = "Waiting...",
                 currentTime = appState.currentTime,
                 eventTitle = appState.eventTitle,
@@ -346,8 +340,6 @@ fun CountdownScreen(
         }
     }
 }
-
-// Previews for different app states
 
 @Preview(device = WearDevices.SMALL_ROUND, showSystemUi = true, name = "1. Needs Sign In")
 @Composable

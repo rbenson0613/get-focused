@@ -10,6 +10,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.CountDownTimer
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,7 @@ class TimerService : Service() {
 
         const val EXTRA_EVENT_TITLE = "eventTitle"
         const val EXTRA_DURATION_MS = "durationMs"
+        const val EXTRA_SHOW_NOTIFICATION = "showNotification" // NEW
 
         private const val CHANNEL_ID = "TimerChannel"
         private const val NOTIFICATION_ID = 42
@@ -38,6 +40,8 @@ class TimerService : Service() {
     private var timer: CountDownTimer? = null
     private val _timerState = MutableStateFlow<TimerState>(TimerState.Idle)
     val timerState = _timerState.asStateFlow()
+
+    private var shouldShowNotification = true
 
     override fun onBind(intent: Intent?): IBinder? = TimerBinder()
 
@@ -56,6 +60,7 @@ class TimerService : Service() {
     private fun startTimer(intent: Intent) {
         val eventTitle = intent.getStringExtra(EXTRA_EVENT_TITLE) ?: "Event"
         val durationMs = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
+        shouldShowNotification = intent.getBooleanExtra(EXTRA_SHOW_NOTIFICATION, true)
 
         if (durationMs <= 0L) {
             Log.w("TimerService", "Invalid duration: $durationMs")
@@ -64,25 +69,46 @@ class TimerService : Service() {
         }
 
         createNotificationChannel()
-        val notification = buildNotification(eventTitle, durationMs)
+
+        // Always start as foreground service (required)
+        val notification = if (shouldShowNotification) {
+            buildNotification(eventTitle, durationMs)
+        } else {
+            buildMinimalNotification()
+        }
         startForeground(NOTIFICATION_ID, notification)
+
+        // If not showing notification, detach it after starting
+        if (!shouldShowNotification) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_DETACH)
+            }
+            Log.d("TimerService", "Started without persistent notification")
+        } else {
+            Log.d("TimerService", "Started with notification")
+        }
 
         timer?.cancel()
         timer = object : CountDownTimer(durationMs, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 val progress = 1f - millisUntilFinished.toFloat() / durationMs.toFloat()
                 _timerState.value = TimerState.Counting(millisUntilFinished, progress, eventTitle)
-                updateNotification(eventTitle, millisUntilFinished)
+
+                // Only update notification if we're showing one
+                if (shouldShowNotification) {
+                    updateNotification(eventTitle, millisUntilFinished)
+                }
             }
 
             override fun onFinish() {
                 _timerState.value = TimerState.Finished
-                stopForeground(STOP_FOREGROUND_DETACH)
+                stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
+                Log.d("TimerService", "Timer finished")
             }
         }.start()
 
-        Log.d("TimerService", "Timer started for $eventTitle ($durationMs ms)")
+        Log.d("TimerService", "Timer started for $eventTitle ($durationMs ms, showNotif=$shouldShowNotification)")
     }
 
     private fun stopTimer() {
@@ -102,10 +128,22 @@ class TimerService : Service() {
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Running countdown timer"
+                setShowBadge(false)
             }
             val nm = getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(channel)
         }
+    }
+
+    private fun buildMinimalNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle("Timer")
+            .setContentText("Running")
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setOngoing(false)
+            .setShowWhen(false)
+            .build()
     }
 
     private fun buildNotification(eventTitle: String, durationMs: Long): Notification {
@@ -129,7 +167,7 @@ class TimerService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Timer Active")
+            .setContentTitle("Event Timer")
             .setContentText("$eventTitle • $timeLeft remaining")
             .setOngoing(true)
             .setOnlyAlertOnce(true)

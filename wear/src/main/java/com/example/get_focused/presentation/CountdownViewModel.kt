@@ -68,12 +68,26 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     private val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
     private val _currentTime = MutableStateFlow(timeFormatter.format(Date()))
 
+    private var nextScheduledEventTitle: String? = null
+    private var nextScheduledEventTime: Long? = null
+    private var alarmDebugTimer: Timer? = null
+
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as TimerService.TimerBinder
             timerService = binder.getService()
             isBound = true
+
+            Log.d("CountdownViewModel", "Service connected, checking current state")
+
             viewModelScope.launch {
+                // Immediately check the current timer state
+                timerService?.timerState?.value?.let { currentState ->
+                    Log.d("CountdownViewModel", "Current timer state: $currentState")
+                    handleTimerState(currentState)
+                }
+
+                // Then collect future states
                 timerService?.timerState?.collect { state ->
                     handleTimerState(state)
                 }
@@ -326,6 +340,9 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                     pendingIntent
                 )
                 Log.d("CountdownViewModel", "Exact alarm scheduled for ${event.startTimeMillis}")
+                nextScheduledEventTitle = event.title
+                nextScheduledEventTime = event.startTimeMillis
+                startAlarmDebugLogger()
             } else {
                 alarmManager.setAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
@@ -438,6 +455,16 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun forceCheckTimerState() {
+        Log.d("CountdownViewModel", "forceCheckTimerState called")
+        timerService?.timerState?.value?.let { currentState ->
+            Log.d("CountdownViewModel", "Current timer state in forceCheck: $currentState")
+            handleTimerState(currentState)
+        } ?: run {
+            Log.d("CountdownViewModel", "TimerService not bound or no current state")
+        }
+    }
+
     private fun startCountdown(durationMillis: Long, eventTitle: String) {
         val intent = Intent(getApplication(), TimerService::class.java).apply {
             action = TimerService.ACTION_START
@@ -505,6 +532,32 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         }, 0, 1000)
     }
 
+    private fun startAlarmDebugLogger() {
+        alarmDebugTimer?.cancel()
+        val eventTitle = nextScheduledEventTitle ?: return
+        val triggerTime = nextScheduledEventTime ?: return
+
+        alarmDebugTimer = Timer()
+        alarmDebugTimer?.scheduleAtFixedRate(object : TimerTask() {
+            override fun run() {
+                val now = System.currentTimeMillis()
+                val remaining = triggerTime - now
+                if (remaining <= 0) {
+                    Log.d("CountdownViewModel", "⏰ [$eventTitle] scheduled time reached or passed!")
+                    alarmDebugTimer?.cancel()
+                } else {
+                    val minutes = TimeUnit.MILLISECONDS.toMinutes(remaining)
+                    val seconds = TimeUnit.MILLISECONDS.toSeconds(remaining) % 60
+                    Log.d(
+                        "CountdownViewModel",
+                        "Next alarm → [$eventTitle] in ${String.format("%02d:%02d", minutes, seconds)}"
+                    )
+                }
+            }
+        }, 0, 10_000) // update every 10 seconds
+    }
+
+
     override fun onCleared() {
         super.onCleared()
         if (isBound) {
@@ -512,5 +565,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             isBound = false
         }
         clockTimer?.cancel()
+        alarmDebugTimer?.cancel()
     }
 }

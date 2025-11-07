@@ -13,6 +13,8 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+
 
     <application
         android:allowBackup="true"
@@ -76,8 +78,10 @@
 
         <activity
             android:name="com.example.get_focused.presentation.MainActivity"
+            android:launchMode="singleTask"
             android:exported="true"
             android:taskAffinity=""
+            android:clearTaskOnLaunch="true"
             android:theme="@style/MainActivityTheme.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -95,13 +99,10 @@
             android:foregroundServiceType="mediaPlayback|dataSync|connectedDevice" />
 
         <receiver
-            android:name="com.example.get_focused.presentation.EventStartReceiver"
-            android:exported="false"
-            android:enabled="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
+            android:name=".presentation.EventStartReceiver"
+            android:exported="true"
+            android:enabled="true"
+            android:directBootAware="true" />
     </application>
 
 </manifest>
