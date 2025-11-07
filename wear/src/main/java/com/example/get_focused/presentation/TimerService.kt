@@ -161,9 +161,15 @@ class TimerService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        // 1. Create an explicit "Open" Action
+        val openAction = NotificationCompat.Action.Builder(
+            android.R.drawable.ic_media_play, // Or any other icon
+            "Open",
+            openPending
+        ).build()
+
         val minutes = TimeUnit.MILLISECONDS.toMinutes(durationMs)
-        val seconds = TimeUnit.MILLISECONDS.toSeconds(durationMs) % 60
-        val timeLeft = String.format("%02d:%02d", minutes, seconds)
+        // ... (rest of your time formatting) ...
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
@@ -171,8 +177,13 @@ class TimerService : Service() {
             .setContentText("$eventTitle • $timeLeft remaining")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setContentIntent(openPending)
+            .setContentIntent(openPending) // Keep this for the tap-to-open behavior
+
+            // 2. Add the "Open" action FIRST
+            .addAction(openAction)
+            // 3. Add the "Stop" action SECOND
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPending)
+
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()

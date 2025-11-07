@@ -15,11 +15,13 @@ import kotlinx.serialization.decodeFromString
 
 import android.content.Intent
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import android.provider.Settings
 
 import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
+import android.os.Build
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
@@ -124,6 +126,23 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         if (isAutoStart) {
             Log.d(TAG, "Auto-start event detected - timer should be running")
             viewModel.forceCheckTimerState()
+        }
+    }
+
+    // In MainActivity.kt
+    private fun requestExactAlarmPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // This Intent takes the user to the system settings page
+            startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+        }
+    }
+
+    // In MainActivity.kt
+    private fun requestFullScreenIntentPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34+
+            // This Intent takes the user to a DIFFERENT system settings page
+            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+            startActivity(intent)
         }
     }
 

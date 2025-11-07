@@ -49,6 +49,28 @@ fun SignInScreen(onSignInClick: () -> Unit) {
     }
 }
 
+// A new Composable screen
+@Composable
+fun PermissionScreen(
+    onGrantClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("We need notifications", textAlign = TextAlign.Center)
+        Text(
+            "To alert you when an event is about to start, please grant the notification permission.",
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.caption2
+        )
+        Button(onClick = onGrantClick, modifier = Modifier.padding(top = 8.dp)) {
+            Text("Grant")
+        }
+    }
+}
+
 @Composable
 fun EventListScreen(
     events: List<UiEvent>,
