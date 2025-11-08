@@ -71,68 +71,63 @@ class EventStartReceiver : BroadcastReceiver() {
     }
 
     private fun launchFullScreenCountdown(context: Context, eventTitle: String, duration: Long) {
-        createNotificationChannel(context)
-
-        // Intent for the full-screen countdown activity
+        // Wear OS: Launch activity directly first (more reliable than full-screen intent)
         val fullScreenIntent = Intent(context, FullScreenCountdownActivity::class.java).apply {
+            // CRITICAL: Must include these flags when starting from BroadcastReceiver
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_NO_USER_ACTION
+                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or
+                    Intent.FLAG_ACTIVITY_NO_USER_ACTION or
+                    Intent.FLAG_FROM_BACKGROUND
+
+            // Add component explicitly
+            component = android.content.ComponentName(
+                context.packageName,
+                "com.example.get_focused.presentation.FullScreenCountdownActivity"
+            )
+
             putExtra("eventTitle", eventTitle)
             putExtra("duration", duration)
         }
 
+        try {
+            context.startActivity(fullScreenIntent)
+            Log.d(TAG, "Launched FullScreenCountdownActivity directly with flags: ${fullScreenIntent.flags}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch activity directly", e)
+            e.printStackTrace()
+        }
+
+        // Also create notification as backup (in case user dismisses activity)
+        createNotificationChannel(context)
+
         val fullScreenPendingIntent = PendingIntent.getActivity(
             context,
-            System.currentTimeMillis().toInt(), // Unique request code
+            System.currentTimeMillis().toInt(),
             fullScreenIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Check if we can use full-screen intents
-        val canUseFullScreen = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            nm.canUseFullScreenIntent()
-        } else {
-            true
-        }
-
-        Log.d(TAG, "Can use full-screen intent: $canUseFullScreen")
-
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("🎯 Event Starting Now!")
-            .setContentText(eventTitle)
+            .setContentTitle("🎯 $eventTitle")
+            .setContentText("Event in progress")
             .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("$eventTitle is starting now. Tap to begin countdown."))
+                .bigText("$eventTitle is in progress. Tap to view countdown."))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setOngoing(false)
-            .setVibrate(longArrayOf(0, 500, 250, 500, 250, 500))
+            .setVibrate(longArrayOf(0, 500, 250, 500))
             .setContentIntent(fullScreenPendingIntent)
-
-        // Set full-screen intent - this launches the activity automatically
-        if (canUseFullScreen) {
-            builder.setFullScreenIntent(fullScreenPendingIntent, true)
-            Log.d(TAG, "Full-screen intent set - activity will launch automatically")
-        } else {
-            Log.w(TAG, "Full-screen intent not allowed - using high-priority notification")
-            // Fallback: try to launch activity directly
-            try {
-                context.startActivity(fullScreenIntent)
-                Log.d(TAG, "Launched activity directly as fallback")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to launch activity", e)
-            }
-        }
 
         val notification = builder.build()
         nm.notify(NOTIFICATION_ID, notification)
 
-        Log.d(TAG, "Full-screen notification posted for '$eventTitle'")
+        Log.d(TAG, "Backup notification posted for '$eventTitle'")
     }
 
     private fun createNotificationChannel(context: Context) {

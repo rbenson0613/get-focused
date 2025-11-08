@@ -95,12 +95,12 @@
 
         <activity
             android:name=".presentation.FullScreenCountdownActivity"
-            android:exported="false"
-            android:theme="@android:style/Theme.DeviceDefault"
+            android:exported="true"
+            android:theme="@style/MainActivityTheme.Starting"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:excludeFromRecents="true"
-            android:launchMode="singleTop" />
+            android:launchMode="singleInstance" />
 
         <service
             android:name="com.example.get_focused.presentation.TimerService"
@@ -109,9 +109,8 @@
 
         <receiver
             android:name=".presentation.EventStartReceiver"
-            android:exported="true"
-            android:enabled="true"
-            android:directBootAware="true" />
+            android:exported="false"
+            android:enabled="true" />
     </application>
 
 </manifest>

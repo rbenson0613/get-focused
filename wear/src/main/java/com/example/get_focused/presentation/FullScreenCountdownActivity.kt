@@ -1,8 +1,14 @@
 package com.example.get_focused.presentation
 
 import android.os.Bundle
+import android.os.Build
+import android.view.WindowManager
+import android.os.PowerManager
+import android.content.Context
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -13,9 +19,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,65 +42,106 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import android.view.WindowManager
-import android.os.PowerManager
-import android.content.Context
-import android.util.Log
 
 class FullScreenCountdownActivity : ComponentActivity() {
 
-    private val TAG = "FullScreenCountdown"
+    companion object {
+        private const val TAG = "FullScreenCountdown"
+    }
+
     private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Log.d(TAG, "=== onCreate START ===")
+
         super.onCreate(savedInstanceState)
 
-        Log.d(TAG, "onCreate called")
+        Log.d(TAG, "=== onCreate after super ===")
 
-        // Keep screen on and show over lockscreen
-        window.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-        )
-
-        // Acquire wake lock to ensure screen stays on
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.FULL_WAKE_LOCK or
-                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
-                    PowerManager.ON_AFTER_RELEASE,
-            "GetFocused:FullScreenWake"
-        )
-        wakeLock?.acquire(10 * 60 * 1000L) // 10 minutes max
-
-        val eventTitle = intent.getStringExtra("eventTitle") ?: "Event"
-        val durationMs = intent.getLongExtra("duration", 60000L)
-
-        Log.d(TAG, "Event: $eventTitle, Duration: $durationMs ms")
-
-        setContent {
-            Get_FocusedTheme {
-                FullScreenCountdown(
-                    eventTitle = eventTitle,
-                    durationMs = durationMs,
-                    onDismiss = { finish() },
-                    onOpenApp = {
-                        // Open main activity and pass the event data
-                        val mainIntent = android.content.Intent(this, MainActivity::class.java).apply {
-                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
-                                    android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            putExtra("auto_start_event", true)
-                            putExtra("eventTitle", eventTitle)
-                            putExtra("duration", durationMs)
-                        }
-                        startActivity(mainIntent)
-                        finish()
-                    }
-                )
+        try {
+            // MUST set these flags before setContent
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(true)
+                setTurnScreenOn(true)
+                Log.d(TAG, "Set show when locked flags (API 27+)")
             }
+
+            // Keep screen on and show over lockscreen
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+
+            Log.d(TAG, "Window flags set")
+
+            // Acquire wake lock to ensure screen stays on
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.FULL_WAKE_LOCK or
+                        PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                        PowerManager.ON_AFTER_RELEASE,
+                "GetFocused:FullScreenWake"
+            )
+            wakeLock?.acquire(10 * 60 * 1000L) // 10 minutes max
+
+            Log.d(TAG, "Wake lock acquired")
+
+            val eventTitle = intent.getStringExtra("eventTitle") ?: "Event"
+            val durationMs = intent.getLongExtra("duration", 60000L)
+
+            Log.d(TAG, "Event: $eventTitle, Duration: $durationMs ms")
+
+            Log.d(TAG, "About to setContent...")
+
+            setContent {
+                Get_FocusedTheme {
+                    FullScreenCountdown(
+                        eventTitle = eventTitle,
+                        durationMs = durationMs,
+                        onDismiss = {
+                            Log.d(TAG, "Dismiss clicked")
+                            finish()
+                        },
+                        onOpenApp = {
+                            Log.d(TAG, "Open App clicked")
+                            // Open main activity and pass the event data
+                            val mainIntent = android.content.Intent(this, MainActivity::class.java).apply {
+                                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                        android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                putExtra("auto_start_event", true)
+                                putExtra("eventTitle", eventTitle)
+                                putExtra("duration", durationMs)
+                            }
+                            startActivity(mainIntent)
+                            finish()
+                        }
+                    )
+                }
+            }
+
+            Log.d(TAG, "=== onCreate COMPLETE ===")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onCreate", e)
+            throw e
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Log.d(TAG, "onStart called")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.d(TAG, "onResume called")
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.d(TAG, "onPause called")
     }
 
     override fun onDestroy() {
@@ -111,7 +158,7 @@ fun FullScreenCountdown(
     onDismiss: () -> Unit,
     onOpenApp: () -> Unit
 ) {
-    var timeRemainingMs by remember { mutableStateOf(durationMs) }
+    var timeRemainingMs by remember { mutableLongStateOf(durationMs) }
     var currentTimeStr by remember { mutableStateOf("") }
 
     // Update countdown every second
@@ -140,7 +187,9 @@ fun FullScreenCountdown(
     val timeString = formatTime(timeRemainingMs)
 
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         // Background progress indicator
@@ -164,8 +213,8 @@ fun FullScreenCountdown(
                     .align(Alignment.TopCenter)
                     .padding(top = 8.dp),
                 textAlign = TextAlign.Center,
-                fontSize = 16.sp,
-                color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f)
+                fontSize = 14.sp,
+                color = Color.White.copy(alpha = 0.7f)
             )
 
             // Center content
@@ -176,8 +225,9 @@ fun FullScreenCountdown(
                 Text(
                     text = eventTitle,
                     textAlign = TextAlign.Center,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -185,7 +235,7 @@ fun FullScreenCountdown(
                 Icon(
                     imageVector = Icons.Default.Coffee,
                     contentDescription = "Event icon",
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(28.dp),
                     tint = Color(0xFF00BCD4)
                 )
 
@@ -194,25 +244,27 @@ fun FullScreenCountdown(
                 // Action buttons
                 Button(
                     onClick = onOpenApp,
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    modifier = Modifier.padding(vertical = 2.dp)
                 ) {
-                    Text("Open App")
+                    Text("Open", fontSize = 12.sp)
                 }
 
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    modifier = Modifier.padding(vertical = 2.dp)
                 ) {
-                    Text("Dismiss")
+                    Text("Dismiss", fontSize = 12.sp)
                 }
             }
 
             // Countdown timer at bottom
             Text(
                 text = timeString,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 8.dp),
                 textAlign = TextAlign.Center,
-                fontSize = 32.sp,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF00BCD4)
             )
