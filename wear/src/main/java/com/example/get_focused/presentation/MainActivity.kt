@@ -58,6 +58,12 @@ import com.example.get_focused.presentation.ui.SignInScreen
 import com.example.get_focused.presentation.ui.UiEvent
 import com.example.get_focused.sync.DataSyncService
 
+// --- NEW IMPORTS ---
+import android.Manifest // NEW
+import android.content.pm.PackageManager // NEW
+import androidx.core.content.ContextCompat // NEW
+// -------------------
+
 class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
     private val TAG = "MainActivityWear"
@@ -79,17 +85,35 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         }
     }
 
+    // --- NEW PERMISSION LAUNCHER ---
+    private val requestPermissionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { isGranted: Boolean ->
+            if (isGranted) {
+                Log.d(TAG, "Notification permission granted")
+            } else {
+                Log.w(TAG, "Notification permission denied")
+                // Here you could show a message, but for now, we'll just log it
+            }
+        }
+    // ---------------------------------
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        // Check for full-screen intent permission
+        // --- NEW PERMISSION CHECKS ---
         checkFullScreenIntentPermission()
+        requestNotificationPermission() // NEW
+        // -----------------------------
 
         LocalBroadcastManager.getInstance(this)
             .registerReceiver(syncReceiver, IntentFilter(DataSyncService.ACTION_SYNC_EVENTS))
 
         setContent {
+            // ... (rest of your setContent block is unchanged) ...
+// ...
             val appState by viewModel.appState.collectAsState()
 
             Get_FocusedTheme {
@@ -116,6 +140,35 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         handleAutoStartIntent(intent)
     }
 
+    // --- NEW PERMISSION REQUEST FUNCTION ---
+    private fun requestNotificationPermission() {
+        // Only needed for Android 13 (API 33, TIRAMISU) and above
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            when {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    // Permission is already granted
+                    Log.d(TAG, "Notification permission already granted")
+                }
+                shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) -> {
+                    // You should show an educational UI to the user, but for now,
+                    // we'll just request the permission again.
+                    // This is a good place to hook in your "PermissionScreen"
+                    Log.d(TAG, "Showing notification permission rationale")
+                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                else -> {
+                    // Directly request the permission
+                    Log.d(TAG, "Requesting notification permission")
+                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        }
+    }
+    // ---------------------------------------
+
     private fun checkFullScreenIntentPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34+
             val nm = getSystemService(NotificationManager::class.java)
@@ -133,6 +186,8 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         }
     }
 
+    // ... (rest of your MainActivity.kt file is unchanged) ...
+// ...
     private fun requestFullScreenIntentPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             try {

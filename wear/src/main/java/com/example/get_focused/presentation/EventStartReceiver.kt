@@ -20,16 +20,34 @@ class EventStartReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
+        Log.d(TAG, "=== EventStartReceiver triggered ===")
+        Log.d(TAG, "Intent action: ${intent.action}")
+        Log.d(TAG, "Intent extras: ${intent.extras?.keySet()}")
+
         val eventTitle = intent.getStringExtra("eventTitle") ?: "Event"
         val duration = intent.getLongExtra("duration", 0L)
+
+        Log.d(TAG, "Event: $eventTitle, Duration: $duration")
+
+        // Check if notification manager is available
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        if (nm == null) {
+            Log.e(TAG, "NotificationManager is null!")
+            return
+        }
+
+        // Check notification settings
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            Log.d(TAG, "Notifications enabled: ${nm.areNotificationsEnabled()}")
+        }
 
         Log.d(TAG, "onReceive: Event '$eventTitle' triggered, duration=$duration")
 
         // 1️⃣ Start the timer service
         startTimerService(context, eventTitle, duration)
 
-        // 2️⃣ Wake the screen and show full-screen notification
-        wakeScreenAndNotify(context, eventTitle, duration)
+        // 2️⃣ Wake the screen and show full-screen activity
+        launchFullScreenCountdown(context, eventTitle, duration)
     }
 
     private fun startTimerService(context: Context, eventTitle: String, duration: Long) {
@@ -52,49 +70,23 @@ class EventStartReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun wakeScreenAndNotify(context: Context, eventTitle: String, duration: Long) {
-        // Wake the screen with full wake lock
-        try {
-            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-            val wakeLock = pm.newWakeLock(
-                PowerManager.FULL_WAKE_LOCK or
-                        PowerManager.ACQUIRE_CAUSES_WAKEUP or
-                        PowerManager.ON_AFTER_RELEASE,
-                "GetFocused:EventWake"
-            )
-            wakeLock.acquire(5000) // Hold for 5 seconds
-            Log.d(TAG, "Screen wake lock acquired")
-
-            // Show the full-screen notification
-            showFullScreenNotification(context, eventTitle, duration)
-
-            wakeLock.release()
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to acquire wake lock or show notification", e)
-        }
-    }
-
-    private fun showFullScreenNotification(context: Context, eventTitle: String, duration: Long) {
+    private fun launchFullScreenCountdown(context: Context, eventTitle: String, duration: Long) {
         createNotificationChannel(context)
 
-        val launchIntent = Intent(context, MainActivity::class.java).apply {
+        // Intent for the full-screen countdown activity
+        val fullScreenIntent = Intent(context, FullScreenCountdownActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                    Intent.FLAG_ACTIVITY_NO_USER_ACTION or
-                    Intent.FLAG_FROM_BACKGROUND
-            putExtra("auto_start_event", true)
+                    Intent.FLAG_ACTIVITY_NO_USER_ACTION
             putExtra("eventTitle", eventTitle)
             putExtra("duration", duration)
         }
 
         val fullScreenPendingIntent = PendingIntent.getActivity(
             context,
-            0,
-            launchIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or
-                    PendingIntent.FLAG_IMMUTABLE or
-                    PendingIntent.FLAG_CANCEL_CURRENT
+            System.currentTimeMillis().toInt(), // Unique request code
+            fullScreenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -113,7 +105,7 @@ class EventStartReceiver : BroadcastReceiver() {
             .setContentTitle("🎯 Event Starting Now!")
             .setContentText(eventTitle)
             .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("$eventTitle is starting now. Tap to begin timer."))
+                .bigText("$eventTitle is starting now. Tap to begin countdown."))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -122,12 +114,19 @@ class EventStartReceiver : BroadcastReceiver() {
             .setVibrate(longArrayOf(0, 500, 250, 500, 250, 500))
             .setContentIntent(fullScreenPendingIntent)
 
-        // Set full-screen intent - this is what makes it pop up
+        // Set full-screen intent - this launches the activity automatically
         if (canUseFullScreen) {
             builder.setFullScreenIntent(fullScreenPendingIntent, true)
-            Log.d(TAG, "Full-screen intent set")
+            Log.d(TAG, "Full-screen intent set - activity will launch automatically")
         } else {
             Log.w(TAG, "Full-screen intent not allowed - using high-priority notification")
+            // Fallback: try to launch activity directly
+            try {
+                context.startActivity(fullScreenIntent)
+                Log.d(TAG, "Launched activity directly as fallback")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to launch activity", e)
+            }
         }
 
         val notification = builder.build()
@@ -141,7 +140,7 @@ class EventStartReceiver : BroadcastReceiver() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Event Start Alerts",
-                NotificationManager.IMPORTANCE_HIGH
+                NotificationManager.IMPORTANCE_MAX // Changed to MAX for full-screen
             ).apply {
                 description = "Full-screen alerts when events start"
                 enableVibration(true)

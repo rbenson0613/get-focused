@@ -93,6 +93,15 @@
             android:name="com.example.get_focused.presentation.AuthActivity"
             android:exported="true" />
 
+        <activity
+            android:name=".presentation.FullScreenCountdownActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.DeviceDefault"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
+
         <service
             android:name="com.example.get_focused.presentation.TimerService"
             android:exported="false"
