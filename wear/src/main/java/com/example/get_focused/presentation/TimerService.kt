@@ -9,7 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.CountDownTimer
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -22,6 +24,7 @@ class TimerService : Service() {
     companion object {
         const val ACTION_START = "com.example.get_focused.START_TIMER"
         const val ACTION_STOP = "com.example.get_focused.STOP_TIMER"
+        const val ACTION_CANCEL_NOTIFICATION = "com.example.get_focused.CANCEL_NOTIFICATION"
 
         const val EXTRA_EVENT_TITLE = "eventTitle"
         const val EXTRA_DURATION_MS = "durationMs"
@@ -43,6 +46,9 @@ class TimerService : Service() {
 
     private var shouldShowNotification = true
 
+    private val notificationHandler by lazy { Handler(Looper.getMainLooper()) }
+    private var notificationRunnable: Runnable? = null
+
     override fun onBind(intent: Intent?): IBinder? = TimerBinder()
 
     inner class TimerBinder : android.os.Binder() {
@@ -53,6 +59,7 @@ class TimerService : Service() {
         when (intent?.action) {
             ACTION_START -> startTimer(intent)
             ACTION_STOP -> stopTimer()
+            ACTION_CANCEL_NOTIFICATION -> cancelNotification()
         }
         return START_STICKY
     }
@@ -85,6 +92,20 @@ class TimerService : Service() {
             }
             Log.d("TimerService", "Started without persistent notification")
         } else {
+            notificationRunnable = object : Runnable {
+                override fun run() {
+                    val notificationManager =
+                        getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    notificationManager.notify(
+                        NOTIFICATION_ID,
+                        buildNotification(eventTitle, _timerState.value.let {
+                            if (it is TimerState.Counting) it.remainingTime else durationMs
+                        })
+                    )
+                    notificationHandler.postDelayed(this, 3000)
+                }
+            }
+            notificationHandler.post(notificationRunnable!!)
             Log.d("TimerService", "Started with notification")
         }
 
@@ -102,6 +123,8 @@ class TimerService : Service() {
 
             override fun onFinish() {
                 _timerState.value = TimerState.Finished
+                notificationRunnable?.let { notificationHandler.removeCallbacks(it) }
+                notificationRunnable = null
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 Log.d("TimerService", "Timer finished")
@@ -114,10 +137,18 @@ class TimerService : Service() {
     private fun stopTimer() {
         timer?.cancel()
         timer = null
+        notificationRunnable?.let { notificationHandler.removeCallbacks(it) }
+        notificationRunnable = null
         _timerState.value = TimerState.Idle
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         Log.d("TimerService", "Timer stopped")
+    }
+
+    private fun cancelNotification() {
+        notificationRunnable?.let { notificationHandler.removeCallbacks(it) }
+        notificationRunnable = null
+        Log.d("TimerService", "Notification cancelled")
     }
 
     private fun createNotificationChannel() {

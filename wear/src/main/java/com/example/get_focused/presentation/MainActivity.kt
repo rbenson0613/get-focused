@@ -138,6 +138,11 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
         // Check if launched by alarm
         handleAutoStartIntent(intent)
+
+        Intent(this, TimerService::class.java).also { intent ->
+            intent.action = TimerService.ACTION_CANCEL_NOTIFICATION
+            startService(intent)
+        }
     }
 
     // --- NEW PERMISSION REQUEST FUNCTION ---
