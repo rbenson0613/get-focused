@@ -116,9 +116,9 @@ class TimerService : Service() {
                 _timerState.value = TimerState.Counting(millisUntilFinished, progress, eventTitle)
 
                 // Only update notification if we're showing one
-                if (shouldShowNotification) {
+                /* if (shouldShowNotification) {
                     updateNotification(eventTitle, millisUntilFinished)
-                }
+                } */
             }
 
             override fun onFinish() {
@@ -156,7 +156,7 @@ class TimerService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Active Timer",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Running countdown timer"
                 setShowBadge(false)
@@ -195,7 +195,7 @@ class TimerService : Service() {
         // 1. Create an explicit "Open" Action
         val openAction = NotificationCompat.Action.Builder(
             android.R.drawable.ic_media_play, // Or any other icon
-            "Open",
+            "Open on watch",
             openPending
         ).build()
 
@@ -210,16 +210,16 @@ class TimerService : Service() {
             .setContentTitle("Event Timer")
             .setContentText("$eventTitle • $timeLeft remaining") // <-- This line will now work
             .setOngoing(true)
-            .setOnlyAlertOnce(true)
+            .setOnlyAlertOnce(false)
             .setContentIntent(openPending) // Keep this for the tap-to-open behavior
 
             // 2. Add the "Open" action FIRST
             .addAction(openAction)
             // 3. Add the "Stop" action SECOND
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPending)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Clear", stopPending)
 
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
     }
 
