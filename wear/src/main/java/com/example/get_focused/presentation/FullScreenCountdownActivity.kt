@@ -43,6 +43,17 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import androidx.lifecycle.lifecycleScope
+import androidx.datastore.preferences.core.edit
+import kotlinx.coroutines.launch
+import com.example.get_focused.presentation.notificationDataStore
+import androidx.lifecycle.lifecycleScope
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import kotlinx.coroutines.launch
+import com.example.get_focused.presentation.notificationDataStore
+
+
 class FullScreenCountdownActivity : ComponentActivity() {
 
     companion object {
@@ -55,6 +66,16 @@ class FullScreenCountdownActivity : ComponentActivity() {
         Log.d(TAG, "=== onCreate START ===")
 
         super.onCreate(savedInstanceState)
+
+        // Check if we should mark as opened
+        if (intent.getBooleanExtra("mark_as_opened", false)) {
+            lifecycleScope.launch {
+                applicationContext.notificationDataStore.edit { prefs ->
+                    prefs[booleanPreferencesKey("event_opened")] = true
+                }
+                Log.d("FullScreenCountdown", "Marked event as opened")
+            }
+        }
 
         Log.d(TAG, "=== onCreate after super ===")
 
