@@ -1,6 +1,6 @@
 package com.example.get_focused.presentation
 
-import android.app.AlarmManager
+import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,7 +8,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -20,7 +19,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-// Create DataStore for tracking if user opened the app
 val Context.notificationDataStore by preferencesDataStore(name = "notification_prefs")
 
 class EventStartReceiver : BroadcastReceiver() {
@@ -29,10 +27,11 @@ class EventStartReceiver : BroadcastReceiver() {
         private const val TAG = "EventStartReceiver"
         private const val CHANNEL_ID = "EventStartChannel"
         private const val NOTIFICATION_ID = 1002
-        private const val REPEAT_INTERVAL_MS = 3_000L // Repeat every 60 seconds
+        private const val REPEAT_INTERVAL_MS = 60_000L
 
         const val ACTION_DISMISS = "com.example.get_focused.NOTIFICATION_DISMISSED"
         const val ACTION_REPEAT = "com.example.get_focused.REPEAT_NOTIFICATION"
+        const val ACTION_EVENT_STARTED = "com.example.get_focused.EVENT_STARTED"
 
         private val EVENT_OPENED_KEY = booleanPreferencesKey("event_opened")
     }
@@ -47,7 +46,6 @@ class EventStartReceiver : BroadcastReceiver() {
 
     private fun handleEventStart(context: Context, intent: Intent) {
         Log.d(TAG, "=== EventStartReceiver triggered ===")
-        Log.d(TAG, "Intent action: ${intent.action}")
 
         val eventTitle = intent.getStringExtra("eventTitle") ?: "Event"
         val duration = intent.getLongExtra("duration", 0L)
@@ -64,14 +62,49 @@ class EventStartReceiver : BroadcastReceiver() {
         // Start the timer service
         startTimerService(context, eventTitle, duration)
 
-        // Launch full-screen activity
-        launchFullScreenCountdown(context, eventTitle, duration)
+        // Check if MainActivity is already running
+        val isAppInForeground = isAppInForeground(context)
+        Log.d(TAG, "Is app in foreground: $isAppInForeground")
 
-        // Show notification with repeat logic
-        showNotification(context, eventTitle, duration, isRepeat = false)
+        if (isAppInForeground) {
+            // App is open - just broadcast to trigger countdown in existing activity
+            Log.d(TAG, "App already open - broadcasting event start")
 
-        // Schedule first repeat
-        scheduleRepeatNotification(context, eventTitle, duration)
+            val broadcastIntent = Intent(ACTION_EVENT_STARTED).apply {
+                putExtra("eventTitle", eventTitle)
+                putExtra("duration", duration)
+            }
+            androidx.localbroadcastmanager.content.LocalBroadcastManager
+                .getInstance(context)
+                .sendBroadcast(broadcastIntent)
+
+            // Mark as opened since app is already open
+            CoroutineScope(Dispatchers.IO).launch {
+                context.notificationDataStore.edit { prefs ->
+                    prefs[EVENT_OPENED_KEY] = true
+                }
+            }
+        } else {
+            // App is closed - show notification with full-screen intent
+            // This will automatically launch the activity even when screen is locked
+            Log.d(TAG, "App closed - showing full-screen notification")
+            showNotificationWithFullScreenIntent(context, eventTitle, duration, isRepeat = false)
+            scheduleRepeatNotification(context, eventTitle, duration)
+        }
+    }
+
+    private fun isAppInForeground(context: Context): Boolean {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val appProcesses = activityManager.runningAppProcesses ?: return false
+
+        val packageName = context.packageName
+        for (appProcess in appProcesses) {
+            if (appProcess.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+                && appProcess.processName == packageName) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun handleDismiss(context: Context, intent: Intent) {
@@ -79,7 +112,6 @@ class EventStartReceiver : BroadcastReceiver() {
         val eventTitle = intent.getStringExtra("eventTitle") ?: "Event"
         val duration = intent.getLongExtra("duration", 0L)
 
-        // Check if user has opened the app
         CoroutineScope(Dispatchers.IO).launch {
             val hasOpened = context.notificationDataStore.data
                 .map { prefs -> prefs[EVENT_OPENED_KEY] ?: false }
@@ -87,7 +119,6 @@ class EventStartReceiver : BroadcastReceiver() {
 
             if (!hasOpened) {
                 Log.d(TAG, "User dismissed without opening - will repeat notification")
-                // Schedule another notification
                 scheduleRepeatNotification(context, eventTitle, duration)
             } else {
                 Log.d(TAG, "User has opened app - not repeating notification")
@@ -100,7 +131,6 @@ class EventStartReceiver : BroadcastReceiver() {
         val eventTitle = intent.getStringExtra("eventTitle") ?: "Event"
         val duration = intent.getLongExtra("duration", 0L)
 
-        // Check if user has opened the app
         CoroutineScope(Dispatchers.IO).launch {
             val hasOpened = context.notificationDataStore.data
                 .map { prefs -> prefs[EVENT_OPENED_KEY] ?: false }
@@ -108,7 +138,7 @@ class EventStartReceiver : BroadcastReceiver() {
 
             if (!hasOpened) {
                 Log.d(TAG, "Repeating notification - user hasn't opened yet")
-                showNotification(context, eventTitle, duration, isRepeat = true)
+                showNotificationWithFullScreenIntent(context, eventTitle, duration, isRepeat = true)
                 scheduleRepeatNotification(context, eventTitle, duration)
             } else {
                 Log.d(TAG, "User has opened app - stopping repeat notifications")
@@ -117,7 +147,7 @@ class EventStartReceiver : BroadcastReceiver() {
     }
 
     private fun scheduleRepeatNotification(context: Context, eventTitle: String, duration: Long) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
 
         val repeatIntent = Intent(context, EventStartReceiver::class.java).apply {
             action = ACTION_REPEAT
@@ -127,7 +157,7 @@ class EventStartReceiver : BroadcastReceiver() {
 
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            NOTIFICATION_ID + 1, // Different request code
+            NOTIFICATION_ID + 1,
             repeatIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -137,19 +167,19 @@ class EventStartReceiver : BroadcastReceiver() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (alarmManager.canScheduleExactAlarms()) {
                 alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
+                    android.app.AlarmManager.RTC_WAKEUP,
                     triggerTime,
                     pendingIntent
                 )
             } else {
                 alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
+                    android.app.AlarmManager.RTC_WAKEUP,
                     triggerTime,
                     pendingIntent
                 )
             }
         } else {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+            alarmManager.setExact(android.app.AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
         }
 
         Log.d(TAG, "Scheduled repeat notification in ${REPEAT_INTERVAL_MS / 1000}s")
@@ -200,25 +230,42 @@ class EventStartReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun showNotification(context: Context, eventTitle: String, duration: Long, isRepeat: Boolean) {
+    private fun showNotificationWithFullScreenIntent(context: Context, eventTitle: String, duration: Long, isRepeat: Boolean) {
         createNotificationChannel(context)
 
-        // Intent for opening the app - marks as "opened" when tapped
-        val openIntent = Intent(context, FullScreenCountdownActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        // Full-screen intent to launch the countdown activity directly
+        val fullScreenIntent = Intent(context, FullScreenCountdownActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
             putExtra("eventTitle", eventTitle)
             putExtra("duration", duration)
-            putExtra("mark_as_opened", true) // Signal to mark as opened
+            putExtra("mark_as_opened", true)
+        }
+
+        val fullScreenPendingIntent = PendingIntent.getActivity(
+            context,
+            System.currentTimeMillis().toInt(),
+            fullScreenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Fallback intent to MainActivity if user dismisses full-screen
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("auto_start_event", true)
+            putExtra("eventTitle", eventTitle)
+            putExtra("duration", duration)
+            putExtra("mark_as_opened", true)
         }
 
         val openPendingIntent = PendingIntent.getActivity(
             context,
-            System.currentTimeMillis().toInt(),
+            System.currentTimeMillis().toInt() + 1,
             openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Dismiss action - triggers repeat logic
         val dismissIntent = Intent(context, EventStartReceiver::class.java).apply {
             action = ACTION_DISMISS
             putExtra("eventTitle", eventTitle)
@@ -227,19 +274,17 @@ class EventStartReceiver : BroadcastReceiver() {
 
         val dismissPendingIntent = PendingIntent.getBroadcast(
             context,
-            System.currentTimeMillis().toInt() + 1,
+            System.currentTimeMillis().toInt() + 2,
             dismissIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Create "Open on watch" action - this appears FIRST
         val openAction = NotificationCompat.Action.Builder(
             android.R.drawable.ic_menu_view,
             "Open on watch",
             openPendingIntent
         ).build()
 
-        // Create "Clear" action - this appears SECOND
         val clearAction = NotificationCompat.Action.Builder(
             android.R.drawable.ic_menu_close_clear_cancel,
             "Clear",
@@ -263,18 +308,19 @@ class EventStartReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setAutoCancel(false) // Don't auto-cancel on tap
+            .setAutoCancel(false)
             .setOngoing(false)
             .setVibrate(longArrayOf(0, 500, 250, 500))
             .setContentIntent(openPendingIntent)
-            .addAction(openAction)  // "Open on watch" appears FIRST
-            .addAction(clearAction) // "Clear" appears SECOND
-            .setDeleteIntent(dismissPendingIntent) // Called when swiped away
+            .setFullScreenIntent(fullScreenPendingIntent, true) // THIS IS THE KEY LINE
+            .addAction(openAction)
+            .addAction(clearAction)
+            .setDeleteIntent(dismissPendingIntent)
 
         val notification = builder.build()
         nm.notify(NOTIFICATION_ID, notification)
 
-        Log.d(TAG, "Notification posted for '$eventTitle' (repeat=$isRepeat)")
+        Log.d(TAG, "Full-screen notification posted for '$eventTitle' (repeat=$isRepeat)")
     }
 
     private fun createNotificationChannel(context: Context) {

@@ -25,22 +25,22 @@ import com.google.api.services.calendar.CalendarScopes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.Timer
-import java.util.TimerTask
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import com.example.get_focused.data.eventsDataStore
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 
 
 sealed class AppState {
@@ -64,13 +64,21 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     private var timerService: TimerService? = null
     private var isBound = false
     private var eventStartPendingIntent: PendingIntent? = null
-    private var clockTimer: Timer? = null
+
+    // Replace Timer with coroutine Job
+    private var clockJob: Job? = null
+    private var alarmDebugJob: Job? = null
+
     private val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
     private val _currentTime = MutableStateFlow(timeFormatter.format(Date()))
 
     private var nextScheduledEventTitle: String? = null
     private var nextScheduledEventTime: Long? = null
-    private var alarmDebugTimer: Timer? = null
+
+    // Cache for events to avoid repeated DataStore reads
+    private var cachedEvents: List<UiEvent>? = null
+    private var lastCacheTime: Long = 0
+    private val CACHE_VALIDITY_MS = 30_000L // 30 seconds
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
@@ -81,13 +89,11 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             Log.d("CountdownViewModel", "Service connected, checking current state")
 
             viewModelScope.launch {
-                // Immediately check the current timer state
                 timerService?.timerState?.value?.let { currentState ->
                     Log.d("CountdownViewModel", "Current timer state: $currentState")
                     handleTimerState(currentState)
                 }
 
-                // Then collect future states
                 timerService?.timerState?.collect { state ->
                     handleTimerState(state)
                 }
@@ -111,24 +117,20 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _appState.value = AppState.Loading
 
-            // Try to load cached events first for offline support
-            val cachedEvents = loadCachedEvents()
+            // Try to load cached events first (with memory cache)
+            val cachedEvents = getCachedEventsWithMemoryCache()
             if (cachedEvents != null && cachedEvents.isNotEmpty()) {
                 Log.d("CountdownViewModel", "Using cached events while checking sign-in")
 
-                // Check if there's an active event NOW
                 val now = System.currentTimeMillis()
                 val activeEvent = cachedEvents.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
 
                 if (activeEvent != null) {
-                    // Only start countdown if event is CURRENTLY active
                     val remainingDuration = activeEvent.endTimeMillis - now
                     startCountdown(remainingDuration, activeEvent.title)
                 } else {
-                    // Show event list and schedule next event in background
                     _appState.value = AppState.ShowEventList(cachedEvents)
 
-                    // Schedule the next upcoming event in background
                     val upcomingEvents = cachedEvents.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
                     if (upcomingEvents.isNotEmpty()) {
                         val nextEvent = upcomingEvents.first()
@@ -138,16 +140,38 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
 
-            // Then try to fetch fresh data from Google Calendar
+            // Then try to fetch fresh data from Google Calendar in background
             val account = GoogleSignIn.getLastSignedInAccount(getApplication())
             if (account != null && GoogleSignIn.hasPermissions(account, Scope("https://www.googleapis.com/auth/calendar.readonly"))) {
-                fetchCalendarEvents(account)
+                // Fetch in background, don't block UI
+                launch(Dispatchers.IO) {
+                    fetchCalendarEvents(account)
+                }
             } else {
-                // If not signed in and no cached events, show sign-in screen
                 if (cachedEvents == null || cachedEvents.isEmpty()) {
                     _appState.value = AppState.NeedsSignIn
                 }
             }
+        }
+    }
+
+    private suspend fun getCachedEventsWithMemoryCache(): List<UiEvent>? {
+        val now = System.currentTimeMillis()
+
+        // Return memory cache if still valid
+        if (cachedEvents != null && (now - lastCacheTime) < CACHE_VALIDITY_MS) {
+            Log.d("CountdownViewModel", "Using memory cache (${cachedEvents!!.size} events)")
+            return cachedEvents
+        }
+
+        // Load from DataStore and update memory cache
+        return withContext(Dispatchers.IO) {
+            val events = loadCachedEvents()
+            if (events != null) {
+                cachedEvents = events
+                lastCacheTime = now
+            }
+            events
         }
     }
 
@@ -161,21 +185,23 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private fun fetchCalendarEvents(account: GoogleSignInAccount) {
-        viewModelScope.launch {
-            try {
-                val accessToken = withContext(Dispatchers.IO) {
-                    GoogleAuthUtil.getToken(
-                        getApplication(),
-                        account.account!!,
-                        "oauth2:${Scope(CalendarScopes.CALENDAR_READONLY).scopeUri}"
-                    )
-                }
-                val events = CalendarManager.getUpcomingEvents(accessToken)
+    private suspend fun fetchCalendarEvents(account: GoogleSignInAccount) {
+        try {
+            val accessToken = withContext(Dispatchers.IO) {
+                GoogleAuthUtil.getToken(
+                    getApplication(),
+                    account.account!!,
+                    "oauth2:${Scope(CalendarScopes.CALENDAR_READONLY).scopeUri}"
+                )
+            }
+            val events = withContext(Dispatchers.IO) {
+                CalendarManager.getUpcomingEvents(accessToken)
+            }
 
-                val rfc3339Formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
+            val rfc3339Formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
 
-                val uiEvents = events.mapNotNull { event ->
+            val uiEvents = withContext(Dispatchers.Default) {
+                events.mapNotNull { event ->
                     try {
                         val start = event.start?.dateTime?.let { rfc3339Formatter.parse(it)?.time }
                         val end = event.end?.dateTime?.let { rfc3339Formatter.parse(it)?.time }
@@ -194,46 +220,52 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                         null
                     }
                 }
+            }
 
-                // Save to cache for offline access
+            // Save to cache (in background)
+            withContext(Dispatchers.IO) {
                 saveEventsToCache(uiEvents)
+            }
 
-                val now = System.currentTimeMillis()
-                val activeEvent = uiEvents.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
+            // Update memory cache
+            cachedEvents = uiEvents
+            lastCacheTime = System.currentTimeMillis()
 
-                if (activeEvent != null) {
-                    // Event is active NOW, start countdown immediately
-                    val remainingDuration = activeEvent.endTimeMillis - now
-                    startCountdown(remainingDuration, activeEvent.title)
-                } else {
-                    // Show event list
-                    _appState.value = AppState.ShowEventList(uiEvents)
+            val now = System.currentTimeMillis()
+            val activeEvent = uiEvents.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
 
-                    // Schedule next upcoming event in background
-                    val upcomingEvents = uiEvents.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
-                    if (upcomingEvents.isNotEmpty()) {
-                        val nextEvent = upcomingEvents.first()
-                        Log.d("CountdownViewModel", "Scheduling next event from calendar: ${nextEvent.title}")
-                        scheduleEventAlarm(nextEvent)
-                    }
+            if (activeEvent != null) {
+                val remainingDuration = activeEvent.endTimeMillis - now
+                startCountdown(remainingDuration, activeEvent.title)
+            } else {
+                _appState.value = AppState.ShowEventList(uiEvents)
+
+                val upcomingEvents = uiEvents.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
+                if (upcomingEvents.isNotEmpty()) {
+                    val nextEvent = upcomingEvents.first()
+                    Log.d("CountdownViewModel", "Scheduling next event from calendar: ${nextEvent.title}")
+                    scheduleEventAlarm(nextEvent)
                 }
-            } catch (e: Exception) {
-                Log.e("CountdownViewModel", "Error fetching calendar events", e)
-                // Try to use cached events on error
-                val cachedEvents = loadCachedEvents()
-                if (cachedEvents != null && cachedEvents.isNotEmpty()) {
-                    Log.d("CountdownViewModel", "Using cached events after fetch error")
-                    updateEventList(cachedEvents)
-                } else {
-                    _appState.value = AppState.NeedsSignIn
-                }
+            }
+        } catch (e: Exception) {
+            Log.e("CountdownViewModel", "Error fetching calendar events", e)
+            val cachedEvents = getCachedEventsWithMemoryCache()
+            if (cachedEvents != null && cachedEvents.isNotEmpty()) {
+                Log.d("CountdownViewModel", "Using cached events after fetch error")
+                updateEventList(cachedEvents)
+            } else {
+                _appState.value = AppState.NeedsSignIn
             }
         }
     }
 
     fun updateEventList(events: List<UiEvent>) {
-        // Save events to local storage
-        viewModelScope.launch {
+        // Update memory cache first
+        cachedEvents = events
+        lastCacheTime = System.currentTimeMillis()
+
+        // Save to DataStore in background
+        viewModelScope.launch(Dispatchers.IO) {
             saveEventsToCache(events)
         }
 
@@ -241,14 +273,11 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         val activeEvent = events.firstOrNull { now >= it.startTimeMillis && now < it.endTimeMillis }
 
         if (activeEvent != null) {
-            // Event is active NOW
             val remainingDuration = activeEvent.endTimeMillis - now
             startCountdown(remainingDuration, activeEvent.title)
         } else {
-            // Show event list
             _appState.value = AppState.ShowEventList(events)
 
-            // Schedule next upcoming event in background
             val upcomingEvents = events.filter { it.startTimeMillis > now }.sortedBy { it.startTimeMillis }
             if (upcomingEvents.isNotEmpty()) {
                 val nextEvent = upcomingEvents.first()
@@ -305,7 +334,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         Log.d("CountdownViewModel", "scheduleEventAlarm: ${event.title}")
         Log.d("CountdownViewModel", "Event start time: ${event.startTimeMillis}, now: $now")
 
-        // If the event already started, start countdown immediately
         if (now >= event.startTimeMillis && now < event.endTimeMillis) {
             Log.d("CountdownViewModel", "Event has already started — starting countdown immediately")
             val remaining = event.endTimeMillis - now
@@ -313,13 +341,11 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
 
-        // Skip events that have already finished
         if (now >= event.endTimeMillis) {
             Log.w("CountdownViewModel", "Event ${event.title} already finished")
             return
         }
 
-        // Otherwise, schedule alarm for future start
         val intent = Intent(getApplication(), EventStartReceiver::class.java).apply {
             putExtra("eventTitle", event.title)
             putExtra("duration", durationMillis)
@@ -373,7 +399,6 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
 
-        // If event has started, start countdown immediately
         if (now >= event.startTimeMillis && now < event.endTimeMillis) {
             Log.d("CountdownViewModel", "Event ${event.title} has started, launching countdown immediately")
             val remaining = event.endTimeMillis - now
@@ -381,14 +406,12 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
 
-        // If event already finished, skip
         if (now >= event.endTimeMillis) {
             Log.w("CountdownViewModel", "Event ${event.title} already finished")
             checkSignInStatus()
             return
         }
 
-        // Otherwise, schedule alarm for the upcoming event
         _appState.value = AppState.WaitingForEvent(_currentTime.value, event.title)
 
         val intent = Intent(getApplication(), EventStartReceiver::class.java).apply {
@@ -440,7 +463,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val triggerTime = System.currentTimeMillis() + 10000 // 10 seconds from now
+        val triggerTime = System.currentTimeMillis() + 10000
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (alarmManager.canScheduleExactAlarms()) {
@@ -523,28 +546,30 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // Replace Timer with coroutine-based clock
     private fun startClock() {
-        clockTimer = Timer()
-        clockTimer?.scheduleAtFixedRate(object : TimerTask() {
-            override fun run() {
+        clockJob?.cancel()
+        clockJob = viewModelScope.launch(Dispatchers.Default) {
+            while (isActive) {
                 _currentTime.value = timeFormatter.format(Date())
+                delay(1000)
             }
-        }, 0, 1000)
+        }
     }
 
+    // Replace Timer with coroutine-based debug logger
     private fun startAlarmDebugLogger() {
-        alarmDebugTimer?.cancel()
+        alarmDebugJob?.cancel()
         val eventTitle = nextScheduledEventTitle ?: return
         val triggerTime = nextScheduledEventTime ?: return
 
-        alarmDebugTimer = Timer()
-        alarmDebugTimer?.scheduleAtFixedRate(object : TimerTask() {
-            override fun run() {
+        alarmDebugJob = viewModelScope.launch(Dispatchers.Default) {
+            while (isActive) {
                 val now = System.currentTimeMillis()
                 val remaining = triggerTime - now
                 if (remaining <= 0) {
                     Log.d("CountdownViewModel", "⏰ [$eventTitle] scheduled time reached or passed!")
-                    alarmDebugTimer?.cancel()
+                    break
                 } else {
                     val minutes = TimeUnit.MILLISECONDS.toMinutes(remaining)
                     val seconds = TimeUnit.MILLISECONDS.toSeconds(remaining) % 60
@@ -553,10 +578,10 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                         "Next alarm → [$eventTitle] in ${String.format("%02d:%02d", minutes, seconds)}"
                     )
                 }
+                delay(10_000) // update every 10 seconds
             }
-        }, 0, 10_000) // update every 10 seconds
+        }
     }
-
 
     override fun onCleared() {
         super.onCleared()
@@ -564,7 +589,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             getApplication<Application>().unbindService(connection)
             isBound = false
         }
-        clockTimer?.cancel()
-        alarmDebugTimer?.cancel()
+        clockJob?.cancel()
+        alarmDebugJob?.cancel()
     }
 }

@@ -13,11 +13,9 @@ import kotlinx.coroutines.tasks.await
 import com.example.get_focused.sync.SyncedEvent
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.decodeFromString
-
 import android.content.Intent
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import android.provider.Settings
-
 import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -57,12 +55,12 @@ import com.example.get_focused.presentation.ui.EventListScreen
 import com.example.get_focused.presentation.ui.SignInScreen
 import com.example.get_focused.presentation.ui.UiEvent
 import com.example.get_focused.sync.DataSyncService
-
-// --- NEW IMPORTS ---
-import android.Manifest // NEW
-import android.content.pm.PackageManager // NEW
-import androidx.core.content.ContextCompat // NEW
-// -------------------
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
 
 class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
@@ -85,7 +83,28 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         }
     }
 
-    // --- NEW PERMISSION LAUNCHER ---
+    // NEW: Receiver for event start broadcasts
+    private val eventStartReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == EventStartReceiver.ACTION_EVENT_STARTED) {
+                val eventTitle = intent.getStringExtra("eventTitle") ?: return
+                val duration = intent.getLongExtra("duration", 0L)
+
+                Log.d(TAG, "Event started broadcast received: $eventTitle")
+
+                // Mark as opened since we're handling it
+                lifecycleScope.launch {
+                    applicationContext.notificationDataStore.edit { prefs ->
+                        prefs[booleanPreferencesKey("event_opened")] = true
+                    }
+                }
+
+                // Trigger countdown in ViewModel
+                viewModel.forceCheckTimerState()
+            }
+        }
+    }
+
     private val requestPermissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestPermission()
@@ -94,26 +113,24 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 Log.d(TAG, "Notification permission granted")
             } else {
                 Log.w(TAG, "Notification permission denied")
-                // Here you could show a message, but for now, we'll just log it
             }
         }
-    // ---------------------------------
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        // --- NEW PERMISSION CHECKS ---
         checkFullScreenIntentPermission()
-        requestNotificationPermission() // NEW
-        // -----------------------------
+        requestNotificationPermission()
 
+        // Register both receivers
         LocalBroadcastManager.getInstance(this)
             .registerReceiver(syncReceiver, IntentFilter(DataSyncService.ACTION_SYNC_EVENTS))
 
+        LocalBroadcastManager.getInstance(this)
+            .registerReceiver(eventStartReceiver, IntentFilter(EventStartReceiver.ACTION_EVENT_STARTED))
+
         setContent {
-            // ... (rest of your setContent block is unchanged) ...
-// ...
             val appState by viewModel.appState.collectAsState()
 
             Get_FocusedTheme {
@@ -136,53 +153,36 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             }
         }
 
-        // Check if launched by alarm
+        // Check if launched by alarm or notification
         handleAutoStartIntent(intent)
-
-        Intent(this, TimerService::class.java).also { intent ->
-            intent.action = TimerService.ACTION_CANCEL_NOTIFICATION
-            startService(intent)
-        }
     }
 
-    // --- NEW PERMISSION REQUEST FUNCTION ---
     private fun requestNotificationPermission() {
-        // Only needed for Android 13 (API 33, TIRAMISU) and above
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             when {
                 ContextCompat.checkSelfPermission(
                     this,
                     Manifest.permission.POST_NOTIFICATIONS
                 ) == PackageManager.PERMISSION_GRANTED -> {
-                    // Permission is already granted
                     Log.d(TAG, "Notification permission already granted")
                 }
                 shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) -> {
-                    // You should show an educational UI to the user, but for now,
-                    // we'll just request the permission again.
-                    // This is a good place to hook in your "PermissionScreen"
                     Log.d(TAG, "Showing notification permission rationale")
                     requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
                 else -> {
-                    // Directly request the permission
                     Log.d(TAG, "Requesting notification permission")
                     requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
             }
         }
     }
-    // ---------------------------------------
 
     private fun checkFullScreenIntentPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             val nm = getSystemService(NotificationManager::class.java)
             if (!nm.canUseFullScreenIntent()) {
                 Log.w(TAG, "Full-screen intent permission not granted")
-                // You could show a dialog here explaining why you need this permission
-                // For now, we'll just log it. The user can grant it in Settings.
-                // Uncomment below to automatically open settings:
-                // requestFullScreenIntentPermission()
             } else {
                 Log.d(TAG, "Full-screen intent permission granted")
             }
@@ -191,8 +191,6 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         }
     }
 
-    // ... (rest of your MainActivity.kt file is unchanged) ...
-// ...
     private fun requestFullScreenIntentPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             try {
@@ -213,7 +211,18 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
     private fun handleAutoStartIntent(intent: Intent?) {
         val isAutoStart = intent?.getBooleanExtra("auto_start_event", false) ?: false
-        Log.d(TAG, "handleAutoStartIntent: isAutoStart=$isAutoStart")
+        val markAsOpened = intent?.getBooleanExtra("mark_as_opened", false) ?: false
+
+        Log.d(TAG, "handleAutoStartIntent: isAutoStart=$isAutoStart, markAsOpened=$markAsOpened")
+
+        if (markAsOpened) {
+            lifecycleScope.launch {
+                applicationContext.notificationDataStore.edit { prefs ->
+                    prefs[booleanPreferencesKey("event_opened")] = true
+                }
+                Log.d(TAG, "✅ Marked as opened from notification tap")
+            }
+        }
 
         if (isAutoStart) {
             Log.d(TAG, "Auto-start event detected - forcing timer state check")
@@ -224,19 +233,14 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     override fun onResume() {
         super.onResume()
         Log.d(TAG, "onResume called")
-        Log.d(TAG, "DataClient listener registered")
         Wearable.getDataClient(this).addListener(this)
 
-        // Check if we have auto-start intent when resuming
         handleAutoStartIntent(intent)
-
-        // Also fetch any missed items from when the app wasn't active
         checkPendingDataItems()
     }
 
     override fun onPause() {
         Log.d(TAG, "onPause called")
-        Log.d(TAG, "DataClient listener unregistered")
         Wearable.getDataClient(this).removeListener(this)
         super.onPause()
     }
@@ -322,6 +326,8 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(syncReceiver)
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(eventStartReceiver)
         Log.d(TAG, "onDestroy called")
     }
 }
