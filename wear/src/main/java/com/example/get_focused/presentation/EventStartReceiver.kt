@@ -27,7 +27,7 @@ class EventStartReceiver : BroadcastReceiver() {
         private const val TAG = "EventStartReceiver"
         private const val CHANNEL_ID = "EventStartChannel"
         private const val NOTIFICATION_ID = 1002
-        private const val REPEAT_INTERVAL_MS = 60_000L
+        private const val REPEAT_INTERVAL_MS = 10_000L // Back to 60 seconds
 
         const val ACTION_DISMISS = "com.example.get_focused.NOTIFICATION_DISMISSED"
         const val ACTION_REPEAT = "com.example.get_focused.REPEAT_NOTIFICATION"
@@ -85,10 +85,12 @@ class EventStartReceiver : BroadcastReceiver() {
                 }
             }
         } else {
-            // App is closed - show notification with full-screen intent
-            // This will automatically launch the activity even when screen is locked
-            Log.d(TAG, "App closed - showing full-screen notification")
-            showNotificationWithFullScreenIntent(context, eventTitle, duration, isRepeat = false)
+            // App is closed - use foreground service to launch activity
+            Log.d(TAG, "App closed - launching activity via foreground service")
+            launchActivityViaService(context, eventTitle, duration)
+
+            // Also show notification as fallback (in case user dismisses activity)
+            showNotification(context, eventTitle, duration, isRepeat = false)
             scheduleRepeatNotification(context, eventTitle, duration)
         }
     }
@@ -138,7 +140,7 @@ class EventStartReceiver : BroadcastReceiver() {
 
             if (!hasOpened) {
                 Log.d(TAG, "Repeating notification - user hasn't opened yet")
-                showNotificationWithFullScreenIntent(context, eventTitle, duration, isRepeat = true)
+                showNotification(context, eventTitle, duration, isRepeat = true)
                 scheduleRepeatNotification(context, eventTitle, duration)
             } else {
                 Log.d(TAG, "User has opened app - stopping repeat notifications")
@@ -205,35 +207,30 @@ class EventStartReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun launchFullScreenCountdown(context: Context, eventTitle: String, duration: Long) {
-        val fullScreenIntent = Intent(context, FullScreenCountdownActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or
-                    Intent.FLAG_ACTIVITY_NO_USER_ACTION or
-                    Intent.FLAG_FROM_BACKGROUND
-
-            component = android.content.ComponentName(
-                context.packageName,
-                "com.example.get_focused.presentation.FullScreenCountdownActivity"
-            )
-
-            putExtra("eventTitle", eventTitle)
-            putExtra("duration", duration)
+    private fun launchActivityViaService(context: Context, eventTitle: String, duration: Long) {
+        val serviceIntent = Intent(context, ActivityLauncherService::class.java).apply {
+            putExtra(ActivityLauncherService.EXTRA_TARGET_ACTIVITY,
+                "com.example.get_focused.presentation.FullScreenCountdownActivity")
+            putExtra(ActivityLauncherService.EXTRA_EVENT_TITLE, eventTitle)
+            putExtra(ActivityLauncherService.EXTRA_DURATION, duration)
         }
 
         try {
-            context.startActivity(fullScreenIntent)
-            Log.d(TAG, "Launched FullScreenCountdownActivity")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
+            Log.d(TAG, "✅ Started ActivityLauncherService")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch activity directly", e)
+            Log.e(TAG, "❌ Failed to start ActivityLauncherService", e)
         }
     }
 
-    private fun showNotificationWithFullScreenIntent(context: Context, eventTitle: String, duration: Long, isRepeat: Boolean) {
+    private fun showNotification(context: Context, eventTitle: String, duration: Long, isRepeat: Boolean) {
         createNotificationChannel(context)
 
-        // Full-screen intent to launch the countdown activity directly
+        // Full-screen intent to launch countdown directly (like an alarm)
         val fullScreenIntent = Intent(context, FullScreenCountdownActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -250,7 +247,7 @@ class EventStartReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Fallback intent to MainActivity if user dismisses full-screen
+        // Fallback to MainActivity
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("auto_start_event", true)
@@ -312,7 +309,7 @@ class EventStartReceiver : BroadcastReceiver() {
             .setOngoing(false)
             .setVibrate(longArrayOf(0, 500, 250, 500))
             .setContentIntent(openPendingIntent)
-            .setFullScreenIntent(fullScreenPendingIntent, true) // THIS IS THE KEY LINE
+            .setFullScreenIntent(fullScreenPendingIntent, true)  // ← KEY LINE for alarm-like behavior
             .addAction(openAction)
             .addAction(clearAction)
             .setDeleteIntent(dismissPendingIntent)

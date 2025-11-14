@@ -179,15 +179,16 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     }
 
     private fun checkFullScreenIntentPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34+
             val nm = getSystemService(NotificationManager::class.java)
             if (!nm.canUseFullScreenIntent()) {
-                Log.w(TAG, "Full-screen intent permission not granted")
+                Log.w(TAG, "Full-screen intent permission not granted - requesting")
+                // Open settings to grant permission
+                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                startActivity(intent)
             } else {
                 Log.d(TAG, "Full-screen intent permission granted")
             }
-        } else {
-            Log.d(TAG, "Full-screen intent available (API < 34)")
         }
     }
 
