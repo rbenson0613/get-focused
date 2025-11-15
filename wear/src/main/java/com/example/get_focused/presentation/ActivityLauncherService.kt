@@ -53,7 +53,9 @@ class ActivityLauncherService : Service() {
         try {
             val activityIntent = Intent().apply {
                 setClassName(packageName, targetActivity)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                        Intent.FLAG_ACTIVITY_NO_HISTORY)  // Add NO_HISTORY
                 putExtra("eventTitle", eventTitle)
                 putExtra("duration", duration)
                 putExtra("mark_as_opened", true)
