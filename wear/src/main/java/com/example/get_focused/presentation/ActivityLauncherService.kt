@@ -3,6 +3,7 @@ package com.example.get_focused.presentation
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -39,7 +40,6 @@ class ActivityLauncherService : Service() {
         // MUST start foreground immediately (Android 8.0+)
         startForeground(NOTIFICATION_ID, createNotification())
 
-        // Launch the target activity
         val targetActivity = intent?.getStringExtra(EXTRA_TARGET_ACTIVITY)
         val eventTitle = intent?.getStringExtra(EXTRA_EVENT_TITLE)
         val duration = intent?.getLongExtra(EXTRA_DURATION, 0L)
@@ -51,29 +51,39 @@ class ActivityLauncherService : Service() {
         }
 
         try {
+            // Use PendingIntent to launch activity - this has better permissions
             val activityIntent = Intent().apply {
                 setClassName(packageName, targetActivity)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
                         Intent.FLAG_ACTIVITY_CLEAR_TASK or
-                        Intent.FLAG_ACTIVITY_NO_HISTORY)  // Add NO_HISTORY
+                        Intent.FLAG_ACTIVITY_NO_HISTORY)
                 putExtra("eventTitle", eventTitle)
                 putExtra("duration", duration)
                 putExtra("mark_as_opened", true)
             }
 
-            startActivity(activityIntent)
-            Log.d(TAG, "✅ Successfully launched activity: $targetActivity")
+            val pendingIntent = PendingIntent.getActivity(
+                this,
+                System.currentTimeMillis().toInt(),
+                activityIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            // Send the PendingIntent immediately
+            pendingIntent.send()
+            Log.d(TAG, "✅ Launched activity via PendingIntent: $targetActivity")
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to launch activity", e)
         }
 
-        // Stop service immediately after launching activity
-        stopSelfAndCleanup()
+        // Stop service after a short delay to ensure PendingIntent fires
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            stopSelfAndCleanup()
+        }, 500)
 
         return START_NOT_STICKY
     }
-
     private fun stopSelfAndCleanup() {
         Log.d(TAG, "Stopping service")
         stopForeground(STOP_FOREGROUND_REMOVE)

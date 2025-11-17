@@ -61,6 +61,19 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import android.net.Uri
+
+// Imports for layout
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+
+// Imports for new icons
+import androidx.compose.material.icons.filled.Check
+
+// Imports for the fixes
+import androidx.compose.ui.unit.dp  // <-- FIX 1: For using 18.dp
 
 class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
@@ -179,15 +192,29 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     }
 
     private fun checkFullScreenIntentPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34+
-            val nm = getSystemService(NotificationManager::class.java)
-            if (!nm.canUseFullScreenIntent()) {
-                Log.w(TAG, "Full-screen intent permission not granted - requesting")
-                // Open settings to grant permission
-                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
-                startActivity(intent)
-            } else {
-                Log.d(TAG, "Full-screen intent permission granted")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (!notificationManager.canUseFullScreenIntent()) {
+                // Show dialog explaining why we need this permission
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Permission Required")
+                    .setMessage("This app needs permission to show full-screen alarms when events start. Please enable it in settings.")
+                    .setPositiveButton("Open Settings") { _, _ ->
+                        try {
+                            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                                data = Uri.parse("package:$packageName")
+                            }
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            // Fallback to app settings
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.parse("package:$packageName")
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                    .setNegativeButton("Later", null)
+                    .show()
             }
         }
     }
@@ -382,7 +409,7 @@ fun WearApp(
 fun CountdownScreen(
     progress: Float,
     time: String,
-    currentTime: String,
+    currentTime: String, // Kept in signature, but not used in layout
     eventTitle: String,
     onStopClick: () -> Unit
 ) {
@@ -390,6 +417,7 @@ fun CountdownScreen(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
+        // 1. Circular progress bar on the outer perimeter
         CircularProgressIndicator(
             progress = progress,
             modifier = Modifier.fillMaxSize(),
@@ -398,48 +426,61 @@ fun CountdownScreen(
             trackColor = MaterialTheme.colors.onBackground.copy(alpha = 0.1f)
         )
 
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)) {
+        // Inner Box for layout elements
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
 
-            Text(
-                text = currentTime,
+            // 2. Event title at the top with the icon to the left
+            Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 8.dp),
-                textAlign = TextAlign.Center,
-                fontSize = 18.sp
-            )
-
-            Column(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(top = 8.dp), // Position at the top
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
+                Icon(
+                    imageVector = Icons.Default.Coffee,
+                    contentDescription = "Event Icon",
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = eventTitle,
                     textAlign = TextAlign.Center,
-                    fontSize = 18.sp,
+                    fontSize = 16.sp,
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Icon(
-                    imageVector = Icons.Default.Coffee,
-                    contentDescription = "Coffee break icon",
-                    modifier = Modifier.size(38.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(onClick = onStopClick) {
-                    Text("Stop")
-                }
             }
 
+            // 3. The timer in the center
             Text(
                 text = time,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.Center), // Position in the center
                 textAlign = TextAlign.Center,
-                fontSize = 34.sp,
+                fontSize = 40.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF00BCD4)
+                color = Color.White
             )
+
+            // 4. Done button with a checkmark icon at the bottom
+            Button(
+                onClick = onStopClick,
+                modifier = Modifier.align(Alignment.BottomCenter) // Position at the bottom
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Done",
+                        modifier = Modifier.size(20.dp) // <-- FIX: Set to a specific 20.dp
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("DONE")
+                }
+            }
         }
     }
 }

@@ -85,11 +85,8 @@ class EventStartReceiver : BroadcastReceiver() {
                 }
             }
         } else {
-            // App is closed - use foreground service to launch activity
-            Log.d(TAG, "App closed - launching activity via foreground service")
-            launchActivityViaService(context, eventTitle, duration)
-
-            // Also show notification as fallback (in case user dismisses activity)
+            // App is closed - show full-screen notification (this should auto-launch)
+            Log.d(TAG, "App closed - showing full-screen notification")
             showNotification(context, eventTitle, duration, isRepeat = false)
             scheduleRepeatNotification(context, eventTitle, duration)
         }
@@ -205,6 +202,49 @@ class EventStartReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start TimerService", e)
         }
+    }
+
+    private fun launchActivityViaAlarm(context: Context, eventTitle: String, duration: Long) {
+        val activityIntent = Intent(context, FullScreenCountdownActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("eventTitle", eventTitle)
+            putExtra("duration", duration)
+            putExtra("mark_as_opened", true)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            System.currentTimeMillis().toInt(),
+            activityIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Create a "show intent" that will open when user taps the alarm clock indicator
+        // This MUST be different from the alarm intent itself
+        val showIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+
+        val showPendingIntent = PendingIntent.getActivity(
+            context,
+            (System.currentTimeMillis() + 1).toInt(),
+            showIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+
+        // The key: Use the showIntent (not the main pendingIntent) in AlarmClockInfo
+        val alarmClockInfo = android.app.AlarmManager.AlarmClockInfo(
+            System.currentTimeMillis() + 100, // 100ms delay
+            showPendingIntent  // ← This is what appears in system UI
+        )
+
+        // But set the actual alarm to fire the activity intent
+        alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+        Log.d(TAG, "✅ Activity launch scheduled via AlarmClock")
     }
 
     private fun launchActivityViaService(context: Context, eventTitle: String, duration: Long) {
