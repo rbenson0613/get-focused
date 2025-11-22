@@ -49,6 +49,8 @@ import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
+import androidx.wear.compose.material.CompactChip
+import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.example.get_focused.presentation.theme.Get_FocusedTheme
 import com.example.get_focused.presentation.ui.EventListScreen
@@ -409,15 +411,15 @@ fun WearApp(
 fun CountdownScreen(
     progress: Float,
     time: String,
-    currentTime: String, // Kept in signature, but not used in layout
+    currentTime: String,
     eventTitle: String,
-    onStopClick: () -> Unit
+    onStopClick: () -> Unit // Kept in signature for compatibility, but unused in layout
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        // 1. Circular progress bar on the outer perimeter
+        // 1. Circular progress bar
         CircularProgressIndicator(
             progress = progress,
             modifier = Modifier.fillMaxSize(),
@@ -426,61 +428,43 @@ fun CountdownScreen(
             trackColor = MaterialTheme.colors.onBackground.copy(alpha = 0.1f)
         )
 
-        // Inner Box for layout elements
+        // Inner Box for content
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
-
-            // 2. Event title at the top with the icon to the left
-            Row(
+            // 2. Event Title at the Top (Large)
+            Text(
+                text = eventTitle,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 8.dp), // Position at the top
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Coffee,
-                    contentDescription = "Event Icon",
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = eventTitle,
-                    textAlign = TextAlign.Center,
-                    fontSize = 16.sp,
-                )
-            }
-
-            // 3. The timer in the center
-            Text(
-                text = time,
-                modifier = Modifier.align(Alignment.Center), // Position in the center
+                    .padding(top = 30.dp, start = 10.dp, end = 10.dp), // Push down from top bezel
                 textAlign = TextAlign.Center,
-                fontSize = 40.sp,
+                fontSize = 22.sp, // Larger font
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                maxLines = 2
             )
 
-            // 4. Done button with a checkmark icon at the bottom
-            Button(
-                onClick = onStopClick,
-                modifier = Modifier.align(Alignment.BottomCenter) // Position at the bottom
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Done",
-                        modifier = Modifier.size(20.dp) // <-- FIX: Set to a specific 20.dp
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("DONE")
-                }
-            }
+            // 3. Icon in the Center (Large)
+            Icon(
+                imageVector = Icons.Default.Coffee,
+                contentDescription = "Event Icon",
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(56.dp), // Much larger icon
+                tint = Color(0xFF00BCD4)
+            )
+
+            // 4. Timer at the Bottom (Smaller)
+            Text(
+                text = time,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 30.dp), // Lift up from bottom bezel
+                textAlign = TextAlign.Center,
+                fontSize = 24.sp, // Smaller font (was 40+)
+                fontWeight = FontWeight.Medium,
+                color = Color.White
+            )
         }
     }
 }

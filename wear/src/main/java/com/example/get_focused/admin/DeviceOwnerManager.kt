@@ -131,9 +131,9 @@ class DeviceOwnerManager(private val context: Context) {
     }
 
     /**
-     * Set up parental control restrictions
+     * Set up parental controls (choose the level of restriction)
      */
-    fun setupParentalControls() {
+    fun setupParentalControls(allowGoogleAccount: Boolean = false) {
         if (!isDeviceOwner()) {
             Log.e(TAG, "Not device owner - cannot setup parental controls")
             return
@@ -142,15 +142,53 @@ class DeviceOwnerManager(private val context: Context) {
         // Set lock task packages to only allow this app
         setLockTaskPackages(arrayOf(context.packageName))
 
-        // Set common parental control restrictions
-        setUserRestrictions(mapOf(
-            android.os.UserManager.DISALLOW_FACTORY_RESET to true,
-            android.os.UserManager.DISALLOW_ADD_USER to true,
-            android.os.UserManager.DISALLOW_REMOVE_USER to true,
-            android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS to true
-        ))
+        // Set restrictions based on whether Google account is allowed
+        if (allowGoogleAccount) {
+            // More lenient - allow Google account but restrict other things
+            setUserRestrictions(mapOf(
+                android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS to false,  // Allow adding Google account
+                android.os.UserManager.DISALLOW_FACTORY_RESET to true,
+                android.os.UserManager.DISALLOW_ADD_USER to true,
+                android.os.UserManager.DISALLOW_REMOVE_USER to true,
+                android.os.UserManager.DISALLOW_APPS_CONTROL to true,      // Prevent app management
+                android.os.UserManager.DISALLOW_INSTALL_APPS to true,      // Prevent app installs
+                android.os.UserManager.DISALLOW_UNINSTALL_APPS to true     // Prevent app uninstalls
+            ))
+            Log.d(TAG, "Parental controls setup with Google account allowed")
+        } else {
+            // Strict mode - no Google account
+            setUserRestrictions(mapOf(
+                android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS to true,   // Block all accounts
+                android.os.UserManager.DISALLOW_FACTORY_RESET to true,
+                android.os.UserManager.DISALLOW_ADD_USER to true,
+                android.os.UserManager.DISALLOW_REMOVE_USER to true
+            ))
+            Log.d(TAG, "Parental controls setup - strict mode (no Google account)")
+        }
+    }
 
-        Log.d(TAG, "Parental controls setup complete")
+    /**
+     * Temporarily allow account modification (e.g., for parent to add supervised account)
+     */
+    fun temporarilyAllowAccountModification(durationMillis: Long = 300000) { // 5 minutes default
+        if (!isDeviceOwner()) {
+            Log.e(TAG, "Not device owner - cannot modify restrictions")
+            return
+        }
+
+        try {
+            // Remove account restriction temporarily
+            dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS)
+            Log.d(TAG, "Account modification temporarily allowed for ${durationMillis}ms")
+
+            // Re-enable restriction after timeout
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS)
+                Log.d(TAG, "Account modification restriction re-enabled")
+            }, durationMillis)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to temporarily allow account modification", e)
+        }
     }
 
     /**

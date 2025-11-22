@@ -116,6 +116,14 @@
         android:exported="false"
         android:foregroundServiceType="connectedDevice" />
 
+        <activity
+            android:name=".presentation.LockTaskActivity"
+            android:exported="true"
+            android:theme="@style/MainActivityTheme.Starting"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance" />
 
         <receiver
             android:name=".presentation.EventStartReceiver"
