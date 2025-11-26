@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,6 +77,10 @@ class LockTaskActivity : ComponentActivity() {
                     unlockTimeMillis = unlockTimeMillis,
                     onUnlockTimeReached = {
                         exitLockTask()
+                    },
+                    onParentOverride = {
+                        Log.w(TAG, "Parent override triggered!")
+                        exitLockTask()
                     }
                 )
             }
@@ -82,7 +88,7 @@ class LockTaskActivity : ComponentActivity() {
     }
 
     private fun exitLockTask() {
-        Log.d(TAG, "Unlock time reached, exiting lock task")
+        Log.d(TAG, "Unlock time reached (or override), exiting lock task")
 
         if (deviceOwnerManager.isDeviceOwner()) {
             deviceOwnerManager.setStatusBarDisabled(false)
@@ -106,10 +112,14 @@ class LockTaskActivity : ComponentActivity() {
 fun LockTaskScreen(
     title: String,
     unlockTimeMillis: Long,
-    onUnlockTimeReached: () -> Unit
+    onUnlockTimeReached: () -> Unit,
+    onParentOverride: () -> Unit
 ) {
     var timeRemainingMs by remember { mutableLongStateOf(0L) }
     var currentTimeStr by remember { mutableStateOf("") }
+
+    // Hidden override state
+    var tapCount by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -174,11 +184,19 @@ fun LockTaskScreen(
                 modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // CHANGED: Added clickable modifier for parent override
                 Icon(
-                    imageVector = Icons.Default.Lock,
+                    imageVector = if (tapCount > 3) Icons.Default.LockOpen else Icons.Default.Lock,
                     contentDescription = "Locked",
-                    modifier = Modifier.size(48.dp),
-                    tint = Color(0xFFFF6B35)
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clickable {
+                            tapCount++
+                            if (tapCount >= 5) {
+                                onParentOverride()
+                            }
+                        },
+                    tint = if (tapCount > 3) Color.Yellow else Color(0xFFFF6B35)
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))

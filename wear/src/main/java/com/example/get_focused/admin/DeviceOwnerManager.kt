@@ -150,9 +150,9 @@ class DeviceOwnerManager(private val context: Context) {
                 android.os.UserManager.DISALLOW_FACTORY_RESET to true,
                 android.os.UserManager.DISALLOW_ADD_USER to true,
                 android.os.UserManager.DISALLOW_REMOVE_USER to true,
-                android.os.UserManager.DISALLOW_APPS_CONTROL to true,      // Prevent app management
-                android.os.UserManager.DISALLOW_INSTALL_APPS to true,      // Prevent app installs
-                android.os.UserManager.DISALLOW_UNINSTALL_APPS to true     // Prevent app uninstalls
+                android.os.UserManager.DISALLOW_APPS_CONTROL to true // Prevent clearing data/force stopping THIS app
+                // CHANGED: Removed DISALLOW_INSTALL_APPS and DISALLOW_UNINSTALL_APPS
+                // to allow game installation during free time
             ))
             Log.d(TAG, "Parental controls setup with Google account allowed")
         } else {
