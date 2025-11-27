@@ -191,10 +191,11 @@ class EventListActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                Log.d(TAG, "Calling CalendarManager.getUpcomingEvents()...")
-                val events = CalendarManager.getUpcomingEvents(credential)
-                Log.d(TAG, "CalendarManager returned ${events.size} events")
-
+                //Log.d(TAG, "Calling CalendarManager.getUpcomingEvents()...")
+                //val events = CalendarManager.getUpcomingEvents(credential)
+                //Log.d(TAG, "CalendarManager returned ${events.size} events")
+                val events = emptyList<com.google.api.services.calendar.model.Event>()
+                Log.d(TAG, "Sync disabled: Returning empty event list")
                 // Initialize or update adapter
                 if (::eventAdapter.isInitialized) {
                     // Option A: if your adapter supports update, use it (preferred)
