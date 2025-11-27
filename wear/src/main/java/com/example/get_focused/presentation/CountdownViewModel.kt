@@ -144,9 +144,11 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             val account = GoogleSignIn.getLastSignedInAccount(getApplication())
             if (account != null && GoogleSignIn.hasPermissions(account, Scope("https://www.googleapis.com/auth/calendar.readonly"))) {
                 // Fetch in background, don't block UI
-                launch(Dispatchers.IO) {
+                /* <-- COMMENT START
+                    launch(Dispatchers.IO) {
                     fetchCalendarEvents(account)
                 }
+                COMMENT END --> */
             } else {
                 if (cachedEvents == null || cachedEvents.isEmpty()) {
                     _appState.value = AppState.NeedsSignIn

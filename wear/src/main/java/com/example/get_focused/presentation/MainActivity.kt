@@ -64,6 +64,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import android.net.Uri
+import com.example.get_focused.data.eventsDataStore
 
 // Imports for layout
 import androidx.compose.foundation.layout.Arrangement
@@ -134,6 +135,13 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        // --- TEMPORARY FIX: CLEAR CACHE ---
+        // Add this block to wipe the "Week Long Event" from memory
+        lifecycleScope.launch {
+            applicationContext.eventsDataStore.edit { it.clear() }
+            Log.d(TAG, "⚠️ FORCE CLEARED EVENTS CACHE ⚠️")
+        }
 
         checkFullScreenIntentPermission()
         requestNotificationPermission()
@@ -263,10 +271,10 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     override fun onResume() {
         super.onResume()
         Log.d(TAG, "onResume called")
-        Wearable.getDataClient(this).addListener(this)
+        //Wearable.getDataClient(this).addListener(this)
 
         handleAutoStartIntent(intent)
-        checkPendingDataItems()
+        //checkPendingDataItems()
     }
 
     override fun onPause() {
