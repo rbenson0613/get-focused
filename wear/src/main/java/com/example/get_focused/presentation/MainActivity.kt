@@ -64,6 +64,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import android.net.Uri
+import java.util.concurrent.TimeUnit
+
 import com.example.get_focused.data.eventsDataStore
 
 // Imports for layout
@@ -135,13 +137,6 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-
-        // --- TEMPORARY FIX: CLEAR CACHE ---
-        // Add this block to wipe the "Week Long Event" from memory
-        lifecycleScope.launch {
-            applicationContext.eventsDataStore.edit { it.clear() }
-            Log.d(TAG, "⚠️ FORCE CLEARED EVENTS CACHE ⚠️")
-        }
 
         checkFullScreenIntentPermission()
         requestNotificationPermission()
@@ -271,10 +266,10 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     override fun onResume() {
         super.onResume()
         Log.d(TAG, "onResume called")
-        //Wearable.getDataClient(this).addListener(this)
+        Wearable.getDataClient(this).addListener(this)
 
         handleAutoStartIntent(intent)
-        //checkPendingDataItems()
+        checkPendingDataItems()
     }
 
     override fun onPause() {
@@ -313,15 +308,25 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 val uiEvents = syncedEvents.mapNotNull { event ->
                     val endTime = event.endTime
                     if (endTime != null) {
-                        UiEvent(
-                            title = event.title,
-                            startTimeMillis = event.startTime,
-                            endTimeMillis = endTime
-                        )
+                        val duration = endTime - event.startTime
+
+                        // Filter out events longer than 24 hours
+                        if (duration <= TimeUnit.HOURS.toMillis(24)) {
+                            UiEvent(
+                                title = event.title,
+                                startTimeMillis = event.startTime,
+                                endTimeMillis = endTime
+                            )
+                        } else {
+                            Log.d(TAG, "Skipping long event from sync: ${event.title} (duration: ${TimeUnit.MILLISECONDS.toHours(duration)} hours)")
+                            null
+                        }
                     } else {
                         null
                     }
                 }
+
+                Log.d(TAG, "After filtering: ${uiEvents.size} events remain")
 
                 val now = System.currentTimeMillis()
                 val activeEvent = uiEvents.firstOrNull { event ->
@@ -341,7 +346,6 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             }
         }
     }
-
     private fun checkPendingDataItems() {
         CoroutineScope(Dispatchers.IO).launch {
             try {

@@ -144,11 +144,9 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             val account = GoogleSignIn.getLastSignedInAccount(getApplication())
             if (account != null && GoogleSignIn.hasPermissions(account, Scope("https://www.googleapis.com/auth/calendar.readonly"))) {
                 // Fetch in background, don't block UI
-                /* <-- COMMENT START
                     launch(Dispatchers.IO) {
                     fetchCalendarEvents(account)
                 }
-                COMMENT END --> */
             } else {
                 if (cachedEvents == null || cachedEvents.isEmpty()) {
                     _appState.value = AppState.NeedsSignIn
@@ -209,11 +207,19 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                         val end = event.end?.dateTime?.let { rfc3339Formatter.parse(it)?.time }
 
                         if (start != null && end != null) {
-                            UiEvent(
-                                title = event.summary ?: "No Title",
-                                startTimeMillis = start,
-                                endTimeMillis = end
-                            )
+                            val duration = end - start
+
+                            // Filter out events longer than 24 hours
+                            if (duration <= TimeUnit.HOURS.toMillis(24)) {
+                                UiEvent(
+                                    title = event.summary ?: "No Title",
+                                    startTimeMillis = start,
+                                    endTimeMillis = end
+                                )
+                            } else {
+                                Log.d("CountdownViewModel", "Skipping long event: ${event.summary} (duration: ${TimeUnit.MILLISECONDS.toHours(duration)} hours)")
+                                null
+                            }
                         } else {
                             null
                         }
