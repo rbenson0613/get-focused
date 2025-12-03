@@ -60,6 +60,8 @@ dependencies {
     implementation(libs.google.api.services.calendar)
     implementation(libs.google.api.client.android)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

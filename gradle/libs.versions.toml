@@ -11,9 +11,10 @@ material = "1.10.0"
 activity = "1.8.0"
 constraintlayout = "2.1.4"
 composeBom = "2024.09.00"
-composeMaterial = "1.5.2"
-composeMaterialIconsExtended = "1.5.0"
-composeFoundation = "1.5.2"
+# Mobile Compose versions
+composeMaterial = "1.7.2"
+# Wear Compose versions (Distinct from mobile)
+wearCompose = "1.4.0"
 wearToolingPreview = "1.0.0"
 activityCompose = "1.8.0"
 coreSplashscreen = "1.0.1"
@@ -50,10 +51,16 @@ androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
-androidx-wear-compose-material = { group = "androidx.compose.material", name = "material", version.ref = "composeMaterial" }
+
+# FIXED WEAR DEPENDENCIES
+androidx-wear-compose-material = { group = "androidx.wear.compose", name = "compose-material", version.ref = "wearCompose" }
+androidx-wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wearCompose" }
+androidx-wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "wearCompose" }
+
+# Icons can come from mobile compose
 androidx-wear-compose-material-iconsCore = { group = "androidx.compose.material", name = "material-icons-core", version.ref = "composeMaterial" }
-androidx-wear-compose-material-iconsExtended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "composeMaterialIconsExtended" }
-androidx-wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "composeFoundation" }
+androidx-wear-compose-material-iconsExtended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "composeMaterial" }
+
 androidx-wear-tooling-preview = { group = "androidx.wear", name = "wear-tooling-preview", version.ref = "wearToolingPreview" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
@@ -83,7 +90,6 @@ google-api = [
     "google-http-client-gson",
     "google-api-services-calendar"
 ]
-
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
