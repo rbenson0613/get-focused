@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/schedule_title_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Schedule Title (e.g., 'Homework Time')"
+        android:inputType="textCapWords"
+        android:autofillHints="name" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Start Time:"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/start_time_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="10:00 AM" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="End Time:"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/end_time_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="11:00 AM" />
+
+</LinearLayout>

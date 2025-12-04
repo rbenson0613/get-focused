@@ -24,6 +24,10 @@
         <activity
             android:name=".AddEventActivity"
             android:exported="false" />
+        <activity
+            android:name=".LockTaskScheduleActivity"
+            android:exported="false"
+            android:label="Lock Task Schedules" />
     </application>
 
 </manifest>
