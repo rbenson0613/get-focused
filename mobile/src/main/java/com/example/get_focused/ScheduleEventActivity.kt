@@ -35,6 +35,7 @@ class ScheduleEventActivity : AppCompatActivity() {
             // Basic validation
             if (title.isNotEmpty()) {
                 EventManager.addEvent(title, date, time, duration, description)
+                SyncManager.sendEvents(this, EventManager.events)
             }
             finish()
         }
