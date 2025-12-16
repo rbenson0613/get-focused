@@ -11,6 +11,10 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
 class MainActivity : AppCompatActivity() {
+
+    private lateinit var eventsRecycler: RecyclerView
+    private lateinit var locksRecycler: RecyclerView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -32,26 +36,27 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, AddSelectionActivity::class.java))
         }
 
-        // Setup Events List
-        val eventsRecycler = findViewById<RecyclerView>(R.id.recycler_events)
-        val eventItems = listOf(
-            DashboardItem("Leave Home", R.drawable.ic_event_placeholder),
-            DashboardItem("Arrive Work", R.drawable.ic_event_placeholder),
-            DashboardItem("Meeting", R.drawable.ic_event_placeholder)
-        )
+        // Initialize Recyclers
+        eventsRecycler = findViewById(R.id.recycler_events)
         eventsRecycler.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        eventsRecycler.adapter = DashboardAdapter(eventItems) {
+
+        locksRecycler = findViewById(R.id.recycler_locks)
+        locksRecycler.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshLists()
+    }
+
+    private fun refreshLists() {
+        // Refresh Events List
+        eventsRecycler.adapter = DashboardAdapter(EventManager.events) {
             startActivity(Intent(this, EventListActivity::class.java))
         }
 
-        // Setup Locks List
-        val locksRecycler = findViewById<RecyclerView>(R.id.recycler_locks)
-        val lockItems = listOf(
-            DashboardItem("Study Time", R.drawable.ic_lock_placeholder),
-            DashboardItem("Bedtime", R.drawable.ic_lock_placeholder)
-        )
-        locksRecycler.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        locksRecycler.adapter = DashboardAdapter(lockItems) {
+        // Refresh Locks List
+        locksRecycler.adapter = DashboardAdapter(EventManager.locks) {
             startActivity(Intent(this, LockListActivity::class.java))
         }
     }
