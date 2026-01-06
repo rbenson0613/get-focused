@@ -20,6 +20,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".AddSelectionActivity" />
+        <activity android:name=".AccountActivity" />
+        <activity android:name=".HistoryActivity" />
+        <activity android:name=".EventListActivity" />
+        <activity android:name=".LockListActivity" />
+        <activity android:name=".ScheduleEventActivity" />
+        <activity android:name=".ScheduleLockActivity" />
     </application>
 
 </manifest>
