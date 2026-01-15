@@ -19,10 +19,27 @@ class DataLayerListenerService : WearableListenerService() {
             }
         } else if (messageEvent.path == "/sync-locks") {
             val payload = String(messageEvent.data)
-            val lockTitles = payload.split("|").filter { it.isNotEmpty() }
+            // Format: Title|Start|End;Title|Start|End
+
+            val parsedLocks = payload.split(";").mapNotNull { entry ->
+                val parts = entry.split("|")
+                if (parts.size == 3) {
+                    try {
+                        WearLock(
+                            title = parts[0],
+                            startTime = parts[1].toLong(),
+                            endTime = parts[2].toLong()
+                        )
+                    } catch (e: NumberFormatException) {
+                        null
+                    }
+                } else {
+                    null
+                }
+            }
 
             scope.launch {
-                WearEventManager.updateLocks(lockTitles)
+                WearEventManager.updateLocks(parsedLocks)
             }
         }
     }

@@ -36,7 +36,14 @@ object SyncManager {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val nodes = nodeIdClient.connectedNodes.await()
-                val payload = locks.joinToString("|") { it.title }.toByteArray()
+
+                // SERIALIZE: "Title|StartMillis|EndMillis;Title2|..."
+                // We use EventManager.activeLocksData because 'locks' (DashboardItems) doesn't have time info
+                val payloadString = EventManager.activeLocksData.joinToString(";") {
+                    "${it.title}|${it.startTime}|${it.endTime}"
+                }
+
+                val payload = payloadString.toByteArray()
 
                 for (node in nodes) {
                     messageClient.sendMessage(node.id, SYNC_LOCKS_PATH, payload).await()
